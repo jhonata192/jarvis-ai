@@ -32,10 +32,46 @@ class SilentJarvisDaemon:
 
     def __init__(self):
         logger.info("Iniciando Jarvis Daemon (modo fala natural contínua)...")
-        self.agent = JarvisAssistant()
+        # 1. Inicia voz primeiro para poder falar avisos ao usuário se necessário
         self.voice = VoiceEngine()
+        
+        # 2. Verifica se os modelos precisam ser baixados
+        self._check_and_download_models()
+
+        # 3. Inicializa o assistente e IA
+        self.agent = JarvisAssistant()
         self.is_processing = False
         self.running = True
+
+    def _check_and_download_models(self):
+        """Verifica se o modelo da IA e o Whisper estão baixados, avisando o usuário por voz."""
+        from jarvis.config import config
+        from jarvis.core.downloader import ensure_models_available
+
+        llm_path = Path(config.LOCAL_MODEL_PATH)
+        needs_llm = not llm_path.exists() and config.AI_PROVIDER == "local"
+
+        if needs_llm:
+            logger.info("Modelo de IA não encontrado. Falando com o usuário...")
+            try:
+                self.voice.speak("Detectei que é a sua primeira execução. Vou baixar os modelos de inteligência artificial necessários. Por favor, aguarde alguns instantes.")
+            except Exception:
+                pass
+
+        def on_progress(msg: str):
+            logger.info(f"[Download Status]: {msg}")
+
+        ensure_models_available(
+            llm_model_path=llm_path,
+            whisper_model_size=config.WHISPER_MODEL_SIZE,
+            status_callback=on_progress
+        )
+
+        if needs_llm:
+            try:
+                self.voice.speak("Download concluído com sucesso. Finalizando a inicialização.")
+            except Exception:
+                pass
 
     def trigger_hotkey(self):
         if self.is_processing:

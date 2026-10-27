@@ -20,7 +20,13 @@ class LocalLLMProvider:
     def __init__(self, model_path: Optional[str] = None):
         self.model_path = str(model_path or MODEL_PATH)
         if not os.path.exists(self.model_path):
-            raise FileNotFoundError(f"Arquivo do modelo GGUF não encontrado em: {self.model_path}")
+            logger.info(f"Modelo GGUF não encontrado em {self.model_path}. Iniciando download automático...")
+            from jarvis.core.downloader import download_file_with_progress, QWEN_MODEL_URL
+            download_file_with_progress(
+                url=QWEN_MODEL_URL,
+                destination=Path(self.model_path),
+                description="Modelo Qwen 2.5 1.5B (GGUF)"
+            )
 
         logger.info(f"Carregando Qwen 2.5 1.5B com MCP Registry autônomo...")
         self.llm = Llama(
