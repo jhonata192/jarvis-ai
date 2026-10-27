@@ -117,8 +117,25 @@ class SilentJarvisDaemon:
         except Exception as e:
             logger.warning(f"Falha no áudio de inicialização: {e}")
 
+        # Verifica atualizações silenciosamente em segundo plano após inicializar
+        threading.Thread(target=self._check_for_updates_background, daemon=True).start()
+
         while self.running:
             time.sleep(1)
+
+    def _check_for_updates_background(self):
+        """Verifica se há nova versão no GitHub após 5 segundos da inicialização."""
+        time.sleep(5)
+        try:
+            from jarvis.core.updater import JarvisUpdater
+            updater = JarvisUpdater()
+            update_info = updater.check_for_update()
+            if update_info:
+                tag = update_info.get("tag_name", "")
+                logger.info(f"Nova versão encontrada em background: {tag}")
+                self.voice.speak(f"Senhor, uma nova versão do Jarvis, a {tag}, está disponível para atualização.")
+        except Exception as e:
+            logger.debug(f"Verificação em background de atualização falhou: {e}")
 
 if __name__ == "__main__":
     daemon = SilentJarvisDaemon()

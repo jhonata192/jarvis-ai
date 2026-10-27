@@ -53,6 +53,24 @@ class JarvisAssistant:
                 f"e {status['disk_free_gb']} livres no disco."
             )
 
+        # ⚡ Fast-Path de Atualização do Jarvis
+        if any(w in lower for w in ["atualização", "atualizar", "atualize", "update", "nova versão"]):
+            from jarvis.core.updater import JarvisUpdater
+            updater = JarvisUpdater()
+            info = updater.check_for_update()
+            if not info:
+                return f"O Jarvis já está em sua versão mais recente ({updater.current_version}). Nenhuma atualização pendente."
+            
+            tag = info.get("tag_name", "")
+            if "instalar" in lower or "atualize" in lower or "sim" in lower:
+                success = updater.download_and_install_update(info)
+                if success:
+                    return f"A versão {tag} foi baixada e o instalador foi iniciado para atualizar o sistema."
+                else:
+                    return f"Encontrei a versão {tag}, mas ocorreu uma falha ao tentar baixar o instalador."
+            else:
+                return f"Uma nova versão ({tag}) está disponível no GitHub. Peça para eu atualizar para instalar automaticamente."
+
         # RAG Context Retrieval
         rag_context = ""
         if with_rag:
