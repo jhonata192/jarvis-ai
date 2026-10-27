@@ -73,18 +73,42 @@ if errorlevel 1 (
 :: 7. Remove arquivo temporário de versão
 if exist "version_info.txt" del "version_info.txt"
 
-:: 8. Confirmação e resultado
+:: 8. Compilação do Instalador Windows (Inno Setup) se o ISCC estiver instalado
+set ISCC_EXE=""
+if exist "%ProgramFiles(x86)%\Inno Setup 6\iscc.exe" set ISCC_EXE="%ProgramFiles(x86)%\Inno Setup 6\iscc.exe"
+if exist "%ProgramFiles%\Inno Setup 6\iscc.exe" set ISCC_EXE="%ProgramFiles%\Inno Setup 6\iscc.exe"
+if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\iscc.exe" set ISCC_EXE="%LOCALAPPDATA%\Programs\Inno Setup 6\iscc.exe"
+
+if not %ISCC_EXE%=="" (
+    echo.
+    echo [*] Compilando instalador JarvisAI-%JARVIS_VERSION%-Setup.exe com Inno Setup...
+    if exist "dist-installer" rd /s /q "dist-installer"
+    %ISCC_EXE% /DMyAppVersion="%JARVIS_VERSION%" "installer.iss"
+    if exist "dist-installer\JarvisAI-%JARVIS_VERSION%-Setup.exe" (
+        echo [OK] Instalador gerado: %~dp0dist-installer\JarvisAI-%JARVIS_VERSION%-Setup.exe
+    )
+) else (
+    echo.
+    echo [INFO] Inno Setup nao localizado nesta maquina local.
+    echo        O executavel portatil foi gerado em dist\JarvisAI\.
+    echo        (No GitHub Actions, o instalador .exe sera gerado e publicado automaticamente!)
+)
+
+:: 9. Confirmação e resultado
 if exist "dist\JarvisAI\JarvisAI.exe" (
     echo.
     echo =========================================================
     echo   [SUCESSO] JARVIS AI v%JARVIS_VERSION% COMPILADO!
     echo =========================================================
-    echo Localizacao: %~dp0dist\JarvisAI\JarvisAI.exe
+    echo Versao Portatil: %~dp0dist\JarvisAI\JarvisAI.exe
+    if exist "dist-installer\JarvisAI-%JARVIS_VERSION%-Setup.exe" (
+        echo Instalador .exe: %~dp0dist-installer\JarvisAI-%JARVIS_VERSION%-Setup.exe
+    )
     echo.
-    echo A versao %JARVIS_VERSION% foi embutida no .exe e gravada em version.py.
+    echo A versao %JARVIS_VERSION% foi embutida e gravada em version.py.
     echo.
     echo DICA: Ao fazer 'git commit' e 'git push', o GitHub Actions
-    echo publicara uma nova Release oficial com o ZIP do Jarvis automaticamente!
+    echo publicara a Release com o ZIP portatil e o INSTALADOR .exe automaticamente!
     echo.
 ) else (
     echo.

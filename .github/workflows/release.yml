@@ -72,7 +72,7 @@ jobs:
         run: |
           pyinstaller jarvis.spec --noconfirm
 
-      - name: Compress Release Package into ZIP
+      - name: Compress Release Package into Portable ZIP
         if: env.SHOULD_RELEASE == 'true'
         shell: pwsh
         run: |
@@ -81,7 +81,27 @@ jobs:
           Compress-Archive -Path "dist\JarvisAI\*" -DestinationPath $zipName
           echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
 
-      - name: Create GitHub Release and Upload Binary
+      - name: Install Inno Setup
+        if: env.SHOULD_RELEASE == 'true'
+        run: |
+          choco install innosetup --no-progress -y
+
+      - name: Build Windows Installer (Setup.exe)
+        if: env.SHOULD_RELEASE == 'true'
+        shell: pwsh
+        run: |
+          $ver = $env:CURRENT_VERSION
+          $installerName = "JarvisAI-$ver-Setup.exe"
+          & "C:\Program Files (x86)\Inno Setup 6\iscc.exe" /DMyAppVersion="$ver" installer.iss
+          if (Test-Path "dist-installer\$installerName") {
+            Write-Host "Installer created successfully: dist-installer\$installerName"
+            echo "INSTALLER_PATH=dist-installer\$installerName" >> $env:GITHUB_ENV
+          } else {
+            Write-Error "Installer file not found!"
+            exit 1
+          }
+
+      - name: Create GitHub Release and Upload Binaries
         if: env.SHOULD_RELEASE == 'true'
         uses: softprops/action-gh-release@v2
         with:
@@ -90,19 +110,25 @@ jobs:
           body: |
             ## 🚀 Jarvis AI Release ${{ env.TAG_NAME }}
             
-            Assistente virtual pessoal offline compilado para Windows 64-bit.
+            Assistente virtual pessoal offline para Windows 64-bit.
+            
+            ### 📥 Opções de Download:
+            1. **Instalador Oficial (`.exe`)**:
+               - Baixe o instalador `JarvisAI-${{ env.CURRENT_VERSION }}-Setup.exe` para instalar o Jarvis no seu sistema com atalho na Área de Trabalho e inicialização com o Windows (opcional).
+            2. **Versão Portátil (`.zip`)**:
+               - Baixe o `JarvisAI-${{ env.CURRENT_VERSION }}-Windows-x64.zip`, extraia em qualquer pasta e execute diretamente sem instalação.
             
             ### 📦 O que está incluído:
-            - Executável nativo `JarvisAI.exe` pré-compilado (sem necessidade de ter Python instalado).
-            - Servidor MCP de ferramentas do Windows integrado.
+            - Executável nativo `JarvisAI.exe` pré-compilado (dispensa instalação prévia de Python).
+            - Servidor de ferramentas de hardware integrado via MCP (Bluetooth, Volume, Bateria, Apps).
             - Reconhecimento de fala Whisper local e síntese neural Edge-TTS.
-            - Suporte a modelos locais GGUF offline.
+            - Download automático transparente do modelo local GGUF e pesos Whisper na primeira inicialização com feedback por voz.
             
             ### 💻 Como usar:
-            1. Baixe o arquivo `${{ env.ZIP_NAME }}` abaixo.
-            2. Extraia o conteúdo para uma pasta no seu computador.
-            3. Execute `JarvisAI.exe`.
-            4. Pressione `Ctrl + Alt + J` para falar com o Jarvis.
-          files: ${{ env.ZIP_NAME }}
+            - Execute o instalador ou abra `JarvisAI.exe`.
+            - Pressione `Ctrl + Alt + J` para conversar com o Jarvis.
+          files: |
+            ${{ env.ZIP_NAME }}
+            ${{ env.INSTALLER_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
