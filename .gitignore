@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Model Weights (Arquivos binários grandes que são baixados sob demanda)
+models/*.gguf
+models/
+huggingface/
+.cache/
+
+# ChromaDB Memory local
+jarvis/memory_data/chromadb/
+jarvis/memory_data/
+
+# Logs locais
+logs/
+*.log
+
+# Variáveis de ambiente locais com chaves privadas
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Áudios temporários
+*.mp3
