@@ -13,7 +13,7 @@ Assistente virtual avançado em Python com arquitetura inspirada no JARVIS, oper
 
 2. **Servidor MCP do Windows (`jarvis-system`)**:
    - Controle total de hardware e sistema via ferramentas padronizadas MCP:
-     - `get_bluetooth_devices`: Lista periféricos conectados e reporta nível de bateria (GATT).
+     - `get_bluetooth_devices`: Lista periféricos conectados e reporta nível de bateria (GATT) de forma universal.
      - `set_bluetooth_radio_state`: Liga ou desliga a antena Bluetooth por comando de voz.
      - `set_system_volume`: Ajusta o volume do som de 0 a 100%.
      - `get_battery_status`: Porcentagem da bateria do PC e status de carregamento.
@@ -68,15 +68,26 @@ jarvis_ai/
 ├── models/                     # Modelos GGUF locais (Qwen 2.5)
 ├── logs/                       # Logs de execução
 ├── test_jarvis.py              # Suíte de testes de integração
+├── build.bat                   # Compilação automática do executável .exe
 ├── iniciar.bat                 # Script para iniciar em background
 ├── parar.bat                   # Script para encerrar o Jarvis
+├── jarvis.spec                 # Configuração do PyInstaller
 ├── requirements.txt            # Dependências Python
 └── README.md
 ```
 
 ---
 
-## 🚀 Como Executar
+## 🛠️ Como Compilar o Executável Automaticamente
+
+Para gerar o executável nativo do Windows com um clique:
+1. Dê dois cliques em **`build.bat`**.
+2. O script cuidará de tudo: validação do ambiente virtual, dependências do PyInstaller, limpeza de builds antigos e compilação do executável.
+3. O resultado final estará pronto na pasta **`dist\JarvisAI\JarvisAI.exe`**.
+
+---
+
+## 🚀 Como Executar em Desenvolvimento
 
 ### 1. Clonar o Repositório e Criar Ambiente
 ```powershell
