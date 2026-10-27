@@ -6,7 +6,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 block_cipher = None
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(SPECPATH).resolve()
 
 datas = [
     (str(BASE_DIR / "jarvis" / "assets" / "sounds"), "jarvis/assets/sounds"),
