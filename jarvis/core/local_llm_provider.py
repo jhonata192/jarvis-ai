@@ -5,11 +5,10 @@ import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from llama_cpp import Llama
+from jarvis.config import config
 from jarvis.core.mcp_registry import MCPRegistry
 
 logger = logging.getLogger("Jarvis.LocalLLM")
-
-MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "models" / "qwen2.5-1.5b-instruct-q4_k_m.gguf"
 
 class LocalLLMProvider:
     """
@@ -18,7 +17,7 @@ class LocalLLMProvider:
     """
 
     def __init__(self, model_path: Optional[str] = None):
-        self.model_path = str(model_path or MODEL_PATH)
+        self.model_path = str(model_path or config.LOCAL_MODEL_PATH)
         if not os.path.exists(self.model_path):
             logger.info(f"Modelo GGUF não encontrado em {self.model_path}. Iniciando download automático...")
             from jarvis.core.downloader import download_file_with_progress, QWEN_MODEL_URL

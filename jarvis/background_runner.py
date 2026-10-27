@@ -6,12 +6,11 @@ import threading
 from pathlib import Path
 import keyboard
 
+from jarvis.config import config, LOGS_DIR
 from jarvis.core.agent import JarvisAssistant
 from jarvis.voice.engine import VoiceEngine
 
-LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-LOG_FILE = LOG_DIR / "jarvis_background.log"
+LOG_FILE = LOGS_DIR / "jarvis_background.log"
 
 logging.basicConfig(
     filename=str(LOG_FILE),

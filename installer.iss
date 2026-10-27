@@ -17,7 +17,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={localappdata}\{#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
@@ -29,7 +29,6 @@ WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
