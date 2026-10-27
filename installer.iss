@@ -29,6 +29,9 @@ WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+CloseApplications=yes
+CloseApplicationsFilter=JarvisAI.exe
+RestartApplications=yes
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"

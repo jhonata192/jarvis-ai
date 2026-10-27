@@ -114,14 +114,24 @@ class JarvisUpdater:
             logger.info(f"Instalador da nova versão baixado com sucesso em: {installer_file}")
 
             # Executa o instalador Inno Setup no modo silencioso (/SILENT /NORESTART)
-            # Ele fecha a versão anterior se necessário, substitui os arquivos e reinicia
+            # O Inno Setup fecha qualquer processo residual, substitui os arquivos e reinicia
             cmd = f'start "" "{installer_file}" /SILENT /NORESTART'
             subprocess.Popen(
                 cmd,
                 shell=True,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             )
-            logger.info("Instalador da atualização disparado. Encerrando processo atual...")
+            logger.info("Instalador da atualização disparado. Encerrando processo atual do Jarvis para liberar o .exe...")
+
+            # Dá 2 segundos para o processo do instalador subir e encerra o Jarvis atual
+            # liberando imediatamente o arquivo JarvisAI.exe para sobrescrita
+            import threading
+            def _exit_jarvis():
+                import time
+                time.sleep(2)
+                os._exit(0)
+
+            threading.Thread(target=_exit_jarvis, daemon=True).start()
             return True
 
         except Exception as e:
