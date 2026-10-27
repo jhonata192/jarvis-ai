@@ -1,0 +1,108 @@
+name: Auto Release on Version Bump
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Extract Version from version.py
+        id: get_version
+        shell: pwsh
+        run: |
+          if (Test-Path "version.py") {
+            $ver = (Get-Content "version.py" | Select-String 'VERSION\s*=\s*["'']([^"'']+)["'']').Matches.Groups[1].Value
+          } else {
+            $ver = "1.0.0"
+          }
+          Write-Host "Detected project version: $ver"
+          echo "CURRENT_VERSION=$ver" >> $env:GITHUB_ENV
+          echo "TAG_NAME=v$ver" >> $env:GITHUB_ENV
+
+      - name: Check if Release / Tag already exists
+        id: check_tag
+        shell: pwsh
+        run: |
+          $tag = $env:TAG_NAME
+          $tagExists = git tag -l $tag
+          if ($tagExists) {
+            Write-Host "Tag $tag already exists. Skipping build and release."
+            echo "SHOULD_RELEASE=false" >> $env:GITHUB_ENV
+          } else {
+            Write-Host "New version detected ($tag)! Proceeding with build and release."
+            echo "SHOULD_RELEASE=true" >> $env:GITHUB_ENV
+          }
+
+      - name: Install Build Dependencies
+        if: env.SHOULD_RELEASE == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+          pip install pyinstaller
+
+      - name: Prepare Version Info for Executable
+        if: env.SHOULD_RELEASE == 'true'
+        shell: pwsh
+        run: |
+          $ver = $env:CURRENT_VERSION
+          $verComma = $ver -replace '\.', ','
+          (Get-Content 'version_info.txt.template') -replace '{VER_STR}', $ver -replace '{VER_COMMA}', $verComma | Set-Content 'version_info.txt' -Encoding utf8
+
+      - name: Compile Jarvis Executable via PyInstaller
+        if: env.SHOULD_RELEASE == 'true'
+        run: |
+          pyinstaller jarvis.spec --noconfirm
+
+      - name: Compress Release Package into ZIP
+        if: env.SHOULD_RELEASE == 'true'
+        shell: pwsh
+        run: |
+          $ver = $env:CURRENT_VERSION
+          $zipName = "JarvisAI-$ver-Windows-x64.zip"
+          Compress-Archive -Path "dist\JarvisAI\*" -DestinationPath $zipName
+          echo "ZIP_NAME=$zipName" >> $env:GITHUB_ENV
+
+      - name: Create GitHub Release and Upload Binary
+        if: env.SHOULD_RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: "Jarvis AI ${{ env.TAG_NAME }}"
+          body: |
+            ## 🚀 Jarvis AI Release ${{ env.TAG_NAME }}
+            
+            Assistente virtual pessoal offline compilado para Windows 64-bit.
+            
+            ### 📦 O que está incluído:
+            - Executável nativo `JarvisAI.exe` pré-compilado (sem necessidade de ter Python instalado).
+            - Servidor MCP de ferramentas do Windows integrado.
+            - Reconhecimento de fala Whisper local e síntese neural Edge-TTS.
+            - Suporte a modelos locais GGUF offline.
+            
+            ### 💻 Como usar:
+            1. Baixe o arquivo `${{ env.ZIP_NAME }}` abaixo.
+            2. Extraia o conteúdo para uma pasta no seu computador.
+            3. Execute `JarvisAI.exe`.
+            4. Pressione `Ctrl + Alt + J` para falar com o Jarvis.
+          files: ${{ env.ZIP_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -9,17 +9,29 @@ echo.
 
 cd /d "%~dp0"
 
-:: 1. Solicita a versão desejada para o Jarvis
-echo Digite a versao do Jarvis para este build.
-echo Exemplo: 1.0.0 ou 1.2.0
-set /p JARVIS_VERSION="Versao desejada [padrao 1.0.0]: "
+:: 1. Lê a versão atual do arquivo version.py se existir
+set CURRENT_VER=1.0.0
+if exist "version.py" (
+    for /f "tokens=2 delims==" %%a in ('type version.py ^| findstr "VERSION"') do (
+        set CURRENT_VER=%%~a
+        set CURRENT_VER=!CURRENT_VER:"=!
+        set CURRENT_VER=!CURRENT_VER: =!
+    )
+)
+
+echo Versao atual registrada: !CURRENT_VER!
+echo Digite a nova versao do Jarvis para este build (Ex: 1.0.1, 1.1.0).
+set /p JARVIS_VERSION="Versao desejada [padrao !CURRENT_VER!]: "
 
 if "%JARVIS_VERSION%"=="" (
-    set JARVIS_VERSION=1.0.0
+    set JARVIS_VERSION=!CURRENT_VER!
 )
 
 echo.
 echo [*] Configurando build para a versao: %JARVIS_VERSION%
+
+:: Atualiza o arquivo version.py para o GitHub Actions detectar
+echo VERSION = "%JARVIS_VERSION%" > version.py
 
 :: 2. Prepara os dados de versão para o executável do Windows
 set VER_COMMA=%JARVIS_VERSION:.=,%
@@ -69,7 +81,10 @@ if exist "dist\JarvisAI\JarvisAI.exe" (
     echo =========================================================
     echo Localizacao: %~dp0dist\JarvisAI\JarvisAI.exe
     echo.
-    echo A versao %JARVIS_VERSION% foi embutida diretamente nos metadados do executavel.
+    echo A versao %JARVIS_VERSION% foi embutida no .exe e gravada em version.py.
+    echo.
+    echo DICA: Ao fazer 'git commit' e 'git push', o GitHub Actions
+    echo publicara uma nova Release oficial com o ZIP do Jarvis automaticamente!
     echo.
 ) else (
     echo.
