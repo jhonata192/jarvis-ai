@@ -65,19 +65,21 @@ class SilentJarvisDaemon:
             except Exception as e:
                 logger.warning(f"Falha ao falar aviso inicial: {e}")
 
-        # Controle de anúncio da porcentagem por voz em tempo real
-        spoken_milestones = set()
+        # Controle de anúncio da porcentagem por voz a cada 5 segundos
+        last_spoken_time = [0.0]
+        last_spoken_pct = [-1]
 
         def on_progress(msg: str, pct: int = 0, current_mb: float = 0.0, total_mb: float = 0.0):
             logger.info(f"[Download Status]: {msg}")
             if not needs_llm or pct <= 0:
                 return
 
-            # Fala a porcentagem a cada 10% (ex: 10%, 20%, 30%... 90%, 100%)
-            milestone = (pct // 10) * 10
-            if milestone >= 10 and milestone not in spoken_milestones:
-                spoken_milestones.add(milestone)
-                phrase = f"{milestone} por cento concluído."
+            now = time.time()
+            # Fala se passaram 5 segundos desde a última fala e o percentual mudou
+            if now - last_spoken_time[0] >= 5.0 and pct != last_spoken_pct[0]:
+                last_spoken_time[0] = now
+                last_spoken_pct[0] = pct
+                phrase = f"{pct} por cento concluído."
                 try:
                     offline = self.voice.get_offline_engine()
                     if offline:
