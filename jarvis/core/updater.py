@@ -84,9 +84,13 @@ class JarvisUpdater:
             logger.warning(f"Não foi possível verificar atualizações no GitHub: {e}")
             return None
 
-    def download_and_install_update(self, update_info: Dict[str, Any]) -> bool:
+    def download_and_install_update(
+        self,
+        update_info: Dict[str, Any],
+        status_callback: Optional[Callable] = None
+    ) -> bool:
         """
-        Baixa o instalador da nova versão e o executa silenciosamente no Windows (/SILENT).
+        Baixa o instalador da nova versão com relatório de progresso e o executa silenciosamente no Windows (/SILENT).
         """
         installer_url = update_info.get("installer_url")
         if not installer_url:
@@ -100,16 +104,13 @@ class JarvisUpdater:
         installer_file = temp_dir / f"JarvisAI-{tag}-Setup.exe"
 
         try:
-            req = urllib.request.Request(
-                installer_url,
-                headers={"User-Agent": "JarvisAI-AutoUpdater/1.0"}
+            from jarvis.core.downloader import download_file_with_progress
+            download_file_with_progress(
+                url=installer_url,
+                destination=installer_file,
+                description=f"Atualização do Jarvis {tag}",
+                status_callback=status_callback
             )
-            with urllib.request.urlopen(req) as resp, open(installer_file, "wb") as out:
-                while True:
-                    chunk = resp.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    out.write(chunk)
 
             logger.info(f"Instalador da nova versão baixado com sucesso em: {installer_file}")
 
@@ -123,12 +124,11 @@ class JarvisUpdater:
             )
             logger.info("Instalador da atualização disparado. Encerrando processo atual do Jarvis para liberar o .exe...")
 
-            # Dá 2 segundos para o processo do instalador subir e encerra o Jarvis atual
-            # liberando imediatamente o arquivo JarvisAI.exe para sobrescrita
+            # Dá 6 segundos para a voz concluir a fala de encerramento e o instalador iniciar
             import threading
             def _exit_jarvis():
                 import time
-                time.sleep(2)
+                time.sleep(6)
                 os._exit(0)
 
             threading.Thread(target=_exit_jarvis, daemon=True).start()

@@ -42,7 +42,7 @@ class SilentJarvisDaemon:
 
         # 3. Inicializa o assistente e IA sob demanda
         from jarvis.core.agent import JarvisAssistant
-        self.agent = JarvisAssistant()
+        self.agent = JarvisAssistant(voice=self.voice)
         self.is_processing = False
         self.running = True
 

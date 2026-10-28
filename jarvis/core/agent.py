@@ -23,9 +23,10 @@ class JarvisAssistant:
     Utiliza o motor Local LLM (Qwen 2.5 1.5B 100% offline) por padrão ou AGY se configurado.
     """
 
-    def __init__(self):
+    def __init__(self, voice=None):
         self.rag = JarvisRAG()
         self.tools = SystemTools()
+        self.voice = voice
         self.provider_type = config.AI_PROVIDER
         
         if self.provider_type == "local":
@@ -56,6 +57,7 @@ class JarvisAssistant:
         # ⚡ Fast-Path de Atualização do Jarvis
         if any(w in lower for w in ["atualização", "atualizações", "atualizacao", "atualizacoes", "atualizar", "atualize", "update", "nova versão", "nova versao"]):
             from jarvis.core.updater import JarvisUpdater
+            import time
             updater = JarvisUpdater()
             info = updater.check_for_update()
             if not info:
@@ -63,9 +65,37 @@ class JarvisAssistant:
             
             tag = info.get("tag_name", "")
             if "instalar" in lower or "atualize" in lower or "sim" in lower:
-                success = updater.download_and_install_update(info)
+                if self.voice:
+                    try:
+                        self.voice.speak(f"Iniciando download da atualização {tag}. Aguarde um instante.")
+                    except Exception:
+                        pass
+
+                last_spoken_time = [0.0]
+                last_spoken_pct = [-1]
+
+                def on_progress(msg: str, pct: int = 0, current_mb: float = 0.0, total_mb: float = 0.0, description: str = ""):
+                    if pct <= 0:
+                        return
+                    now = time.time()
+                    if now - last_spoken_time[0] >= 5.0 and pct != last_spoken_pct[0]:
+                        last_spoken_time[0] = now
+                        last_spoken_pct[0] = pct
+                        if self.voice:
+                            try:
+                                self.voice.speak(f"Download da atualização: {pct} por cento concluído.")
+                            except Exception:
+                                pass
+
+                success = updater.download_and_install_update(info, status_callback=on_progress)
                 if success:
-                    return f"A versão {tag} foi baixada e o instalador foi iniciado para atualizar o sistema."
+                    final_msg = f"A versão {tag} foi baixada e o instalador foi iniciado para atualizar o sistema."
+                    if self.voice:
+                        try:
+                            self.voice.speak(final_msg)
+                        except Exception:
+                            pass
+                    return final_msg
                 else:
                     return f"Encontrei a versão {tag}, mas ocorreu uma falha ao tentar baixar o instalador."
             else:
