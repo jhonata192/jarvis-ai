@@ -14,10 +14,12 @@ datas = [
 ]
 datas += collect_data_files("faster_whisper")
 datas += collect_data_files("chromadb")
+datas += collect_data_files("piper")
 
 binaries = []
 binaries += collect_dynamic_libs("llama_cpp")
 binaries += collect_dynamic_libs("ctranslate2")
+binaries += collect_dynamic_libs("piper")
 
 # Verifica se existe arquivo de versão gerado pelo build.bat
 version_file = str(BASE_DIR / "version_info.txt") if os.path.exists(BASE_DIR / "version_info.txt") else None
@@ -33,6 +35,9 @@ a = Analysis(
         "chromadb",
         "chromadb.api.segment",
         "chromadb.db.impl.sqlite",
+        "piper",
+        "piper.voice",
+        "piper.config",
         "edge_tts",
         "pygame",
         "pynput",

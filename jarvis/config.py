@@ -26,6 +26,7 @@ def get_storage_path(subfolder: str) -> Path:
 LOGS_DIR = get_storage_path("logs")
 MODELS_DIR = get_storage_path("models")
 MEMORY_DIR = get_storage_path("memory_data") / "chromadb"
+PIPER_DIR = MODELS_DIR / "piper"
 
 class JarvisConfig(BaseSettings):
     # Motor de IA: 'local' (offline ultra-leve) ou 'agy' (Antigravity CLI)
@@ -49,10 +50,15 @@ class JarvisConfig(BaseSettings):
     EMBEDDING_MODEL: str = "text-embedding-004"
     
     # Voice Config (TTS)
-    TTS_ENGINE: str = "edge-tts"  # 'edge-tts' ou 'pyttsx3'
+    TTS_ENGINE: str = "piper"  # 'piper' (offline neural ultra-rápido) ou 'edge-tts' (online)
     TTS_VOICE_PT: str = "pt-BR-AntonioNeural"
     TTS_RATE: str = "+10%"
     TTS_VOLUME: str = "+0%"
+    
+    # Piper TTS Config (100% Offline, Neural, Natural e Rápido)
+    PIPER_MODEL_NAME: str = "pt_BR-faber-medium"
+    PIPER_MODEL_PATH: str = str((BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx") if (BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx").exists() else (PIPER_DIR / "pt_BR-faber-medium.onnx"))
+    PIPER_CONFIG_PATH: str = str((BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx.json") if (BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx.json").exists() else (PIPER_DIR / "pt_BR-faber-medium.onnx.json"))
     
     # Whisper STT Config (Modelo Small: alta precisão fonética em português)
     STT_ENGINE: str = "whisper"

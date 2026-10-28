@@ -43,25 +43,22 @@ class SilentJarvisDaemon:
         self.running = True
 
     def _check_and_download_models(self):
-        """Verifica se o modelo da IA e o Whisper estão baixados, avisando o usuário por voz."""
+        """Verifica se o modelo da IA, o Whisper e a voz Piper estão baixados, avisando o usuário por voz."""
         from jarvis.config import config
         from jarvis.core.downloader import ensure_models_available
 
         llm_path = Path(config.LOCAL_MODEL_PATH)
-        needs_llm = not llm_path.exists() and config.AI_PROVIDER == "local"
+        piper_path = Path(config.PIPER_MODEL_PATH)
+        piper_cfg_path = Path(config.PIPER_CONFIG_PATH)
 
-        if needs_llm:
-            logger.info("Modelo de IA não encontrado. Emitindo aviso sonoro imediato...")
-            # Som de aviso imediato para dar feedback instantâneo ao usuário
+        needs_llm = not llm_path.exists() and config.AI_PROVIDER == "local"
+        needs_piper = (not piper_path.exists() or not piper_cfg_path.exists()) and config.TTS_ENGINE == "piper"
+
+        if needs_llm or needs_piper:
+            logger.info("Modelos locais ausentes. Emitindo aviso sonoro imediato...")
             self.voice.play_sound(START_SOUND)
             try:
-                # Usa pyttsx3 se disponível para resposta em 0.1s ou edge-tts
-                offline = self.voice.get_offline_engine()
-                if offline:
-                    offline.say("Detectei que é a sua primeira execução. Vou baixar os modelos de inteligência artificial necessários. Por favor, aguarde alguns instantes.")
-                    offline.runAndWait()
-                else:
-                    self.voice.speak("Detectei que é a sua primeira execução. Vou baixar os modelos de inteligência artificial necessários. Por favor, aguarde alguns instantes.")
+                self.voice.speak("Detectei que é a sua primeira execução. Vou preparar os modelos locais necessários. Por favor, aguarde alguns instantes.")
             except Exception as e:
                 logger.warning(f"Falha ao falar aviso inicial: {e}")
 
@@ -71,7 +68,7 @@ class SilentJarvisDaemon:
 
         def on_progress(msg: str, pct: int = 0, current_mb: float = 0.0, total_mb: float = 0.0):
             logger.info(f"[Download Status]: {msg}")
-            if not needs_llm or pct <= 0:
+            if pct <= 0:
                 return
 
             now = time.time()
@@ -81,29 +78,21 @@ class SilentJarvisDaemon:
                 last_spoken_pct[0] = pct
                 phrase = f"{pct} por cento concluído."
                 try:
-                    offline = self.voice.get_offline_engine()
-                    if offline:
-                        offline.say(phrase)
-                        offline.runAndWait()
-                    else:
-                        self.voice.speak(phrase)
+                    self.voice.speak(phrase)
                 except Exception as e:
                     logger.debug(f"Erro ao falar porcentagem: {e}")
 
         ensure_models_available(
             llm_model_path=llm_path,
             whisper_model_size=config.WHISPER_MODEL_SIZE,
+            piper_model_path=piper_path,
+            piper_config_path=piper_cfg_path,
             status_callback=on_progress
         )
 
-        if needs_llm:
+        if needs_llm or needs_piper:
             try:
-                offline = self.voice.get_offline_engine()
-                if offline:
-                    offline.say("Download concluído com sucesso. Finalizando a inicialização.")
-                    offline.runAndWait()
-                else:
-                    self.voice.speak("Download concluído com sucesso. Finalizando a inicialização.")
+                self.voice.speak("Download concluído com sucesso. Finalizando a inicialização.")
             except Exception:
                 pass
 

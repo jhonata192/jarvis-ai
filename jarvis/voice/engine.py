@@ -16,24 +16,31 @@ STOP_SOUND = SOUNDS_DIR / "listen_stop.wav"
 class VoiceEngine:
     """
     Controlador de voz do Jarvis com fala fluida e contínua (sem pausas quebradas).
+    Suporta Piper TTS (offline neural de alta qualidade), Edge-TTS e fallback SAPI.
     """
 
     def __init__(self):
         self.tts_engine = config.TTS_ENGINE
-        self.offline_engine = None
+        self.piper_voice = None
         self.whisper_model = None
 
-    def get_offline_engine(self):
-        """Inicializa pyttsx3 somente se for necessário (fallback)."""
-        if self.offline_engine is None:
-            try:
-                import pyttsx3
-                self.offline_engine = pyttsx3.init()
-                self.offline_engine.setProperty('rate', 190)
-            except Exception as e:
-                logger.warning(f"Engine pyttsx3 não disponível: {e}")
-                self.offline_engine = False
-        return self.offline_engine if self.offline_engine is not False else None
+    def get_piper_voice(self):
+        """Inicializa Piper TTS sob demanda (lazy loading)."""
+        if self.piper_voice is None:
+            model_path = Path(config.PIPER_MODEL_PATH)
+            config_path = Path(config.PIPER_CONFIG_PATH)
+            if model_path.exists() and config_path.exists():
+                try:
+                    from piper import PiperVoice
+                    logger.info(f"Carregando voz neural Piper ({config.PIPER_MODEL_NAME})...")
+                    self.piper_voice = PiperVoice.load(model_path, config_path)
+                    logger.info("Voz neural Piper carregada com sucesso.")
+                except Exception as e:
+                    logger.warning(f"Falha ao carregar Piper TTS: {e}")
+                    self.piper_voice = False
+            else:
+                self.piper_voice = False
+        return self.piper_voice if self.piper_voice is not False else None
 
     def get_whisper_model(self):
         """Inicializa o modelo Whisper sob demanda (lazy loading) para inicialização instantânea."""
@@ -79,20 +86,55 @@ class VoiceEngine:
         except Exception:
             pass
 
-        if self.tts_engine == "edge-tts":
+        # 1. Tenta Piper TTS (offline neural instantâneo)
+        if self.tts_engine == "piper":
+            if self._speak_piper(clean_text):
+                return
+            logger.warning("Falha ou voz Piper indisponível. Tentando Edge-TTS/SAPI...")
+
+        # 2. Tenta Edge-TTS (online de altíssima qualidade se conectado à internet)
+        if self.tts_engine == "edge-tts" or self.tts_engine == "piper":
             try:
                 asyncio.run(self._speak_edge(clean_text))
                 return
             except Exception as e:
-                logger.warning(f"Falha no Edge-TTS ({e}), usando fallback pyttsx3.")
+                logger.warning(f"Edge-TTS indisponível ({e}). Tentando fallback nativo.")
 
-        offline = self.get_offline_engine()
-        if offline:
-            try:
-                offline.say(clean_text)
-                offline.runAndWait()
-            except Exception as e:
-                logger.error(f"Falha no pyttsx3: {e}")
+        # 3. Fallback nativo Windows SAPI SpVoice
+        self._speak_sapi(clean_text)
+
+    def _speak_piper(self, text: str) -> bool:
+        """Sintetiza áudio via Piper TTS em memória e reproduz via pygame."""
+        voice = self.get_piper_voice()
+        if not voice:
+            return False
+        try:
+            import wave
+            import pygame
+            buf = io.BytesIO()
+            with wave.open(buf, 'wb') as wav_file:
+                voice.synthesize_wav(text, wav_file)
+            buf.seek(0)
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+            sound = pygame.mixer.Sound(buf)
+            sound.play()
+            while pygame.mixer.get_busy():
+                pygame.time.Clock().tick(25)
+            return True
+        except Exception as e:
+            logger.error(f"Erro na síntese do Piper TTS: {e}")
+            return False
+
+    def _speak_sapi(self, text: str):
+        """Fallback leve via SAPI SpVoice nativo do Windows sem travar."""
+        try:
+            import win32com.client
+            voice = win32com.client.Dispatch("SAPI.SpVoice")
+            voice.Rate = 1
+            voice.Speak(text)
+        except Exception as e:
+            logger.error(f"Falha no fallback SAPI: {e}")
 
     async def _speak_edge(self, text: str):
         import edge_tts

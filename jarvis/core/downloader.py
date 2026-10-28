@@ -8,6 +8,8 @@ from typing import Callable, Optional
 logger = logging.getLogger("Jarvis.Downloader")
 
 QWEN_MODEL_URL = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+PIPER_MODEL_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx"
+PIPER_CONFIG_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx.json"
 
 def download_file_with_progress(
     url: str,
@@ -79,13 +81,36 @@ def download_file_with_progress(
 def ensure_models_available(
     llm_model_path: Path,
     whisper_model_size: str,
+    piper_model_path: Optional[Path] = None,
+    piper_config_path: Optional[Path] = None,
     status_callback: Optional[Callable[[str], None]] = None
 ):
     """
-    Verifica se a LLM local e o modelo Faster-Whisper estão presentes.
+    Verifica se a LLM local, o modelo Faster-Whisper e a voz Piper estão presentes.
     Caso não estejam, faz o download automático antes do Jarvis iniciar.
     """
-    # 1. Verificar e baixar o modelo LLM GGUF
+    # 1. Verificar e baixar a voz Piper TTS (se configurada)
+    if piper_model_path and piper_config_path:
+        if not piper_model_path.exists() or not piper_config_path.exists():
+            logger.info("Voz Piper TTS não encontrada. Baixando modelo neural de voz...")
+            if status_callback:
+                status_callback("Baixando voz neural em português...")
+            download_file_with_progress(
+                url=PIPER_MODEL_URL,
+                destination=piper_model_path,
+                description="Voz Neural Piper (pt-BR)",
+                status_callback=status_callback
+            )
+            download_file_with_progress(
+                url=PIPER_CONFIG_URL,
+                destination=piper_config_path,
+                description="Configuração da Voz Piper",
+                status_callback=status_callback
+            )
+        else:
+            logger.info(f"Voz Piper verificada: {piper_model_path}")
+
+    # 2. Verificar e baixar o modelo LLM GGUF
     if not llm_model_path.exists():
         logger.info(f"Modelo LLM não encontrado em: {llm_model_path}")
         if status_callback:
@@ -99,7 +124,7 @@ def ensure_models_available(
     else:
         logger.info(f"Modelo LLM verificado: {llm_model_path}")
 
-    # 2. Verificar e baixar o modelo Faster-Whisper
+    # 3. Verificar e baixar o modelo Faster-Whisper
     # O faster_whisper faz cache automático no huggingface hub / cache local
     logger.info(f"Verificando modelo Whisper ({whisper_model_size})...")
     try:
