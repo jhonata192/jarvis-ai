@@ -20,22 +20,24 @@ class VoiceEngine:
 
     def __init__(self):
         self.tts_engine = config.TTS_ENGINE
-        self._init_offline_engine()
-        self._init_whisper()
-
-    def _init_offline_engine(self):
-        try:
-            import pyttsx3
-            self.offline_engine = pyttsx3.init()
-            self.offline_engine.setProperty('rate', 190)
-        except Exception as e:
-            logger.warning(f"Engine pyttsx3 não disponível: {e}")
-            self.offline_engine = None
-
-    def _init_whisper(self):
-        """Inicializa o modelo Whisper."""
+        self.offline_engine = None
         self.whisper_model = None
-        if config.STT_ENGINE == "whisper":
+
+    def get_offline_engine(self):
+        """Inicializa pyttsx3 somente se for necessário (fallback)."""
+        if self.offline_engine is None:
+            try:
+                import pyttsx3
+                self.offline_engine = pyttsx3.init()
+                self.offline_engine.setProperty('rate', 190)
+            except Exception as e:
+                logger.warning(f"Engine pyttsx3 não disponível: {e}")
+                self.offline_engine = False
+        return self.offline_engine if self.offline_engine is not False else None
+
+    def get_whisper_model(self):
+        """Inicializa o modelo Whisper sob demanda (lazy loading) para inicialização instantânea."""
+        if self.whisper_model is None and config.STT_ENGINE == "whisper":
             try:
                 from faster_whisper import WhisperModel
                 logger.info(f"Carregando Whisper ({config.WHISPER_MODEL_SIZE}) em {config.WHISPER_DEVICE}...")
@@ -47,6 +49,7 @@ class VoiceEngine:
                 logger.info("Modelo Whisper pronto.")
             except Exception as e:
                 logger.error(f"Falha ao carregar faster-whisper: {e}")
+        return self.whisper_model
 
     def play_sound(self, sound_path: Path):
         """Reproduz um som de efeito (beep) curto via pygame."""
@@ -70,7 +73,11 @@ class VoiceEngine:
         if not clean_text:
             return
 
-        print(f"\n🎙️ [Jarvis Fala]: {clean_text}")
+        # Log amigável sem caracteres que quebrem terminais Windows cp1252
+        try:
+            print(f"\n[Jarvis Fala]: {clean_text}")
+        except Exception:
+            pass
 
         if self.tts_engine == "edge-tts":
             try:
@@ -79,10 +86,11 @@ class VoiceEngine:
             except Exception as e:
                 logger.warning(f"Falha no Edge-TTS ({e}), usando fallback pyttsx3.")
 
-        if self.offline_engine:
+        offline = self.get_offline_engine()
+        if offline:
             try:
-                self.offline_engine.say(clean_text)
-                self.offline_engine.runAndWait()
+                offline.say(clean_text)
+                offline.runAndWait()
             except Exception as e:
                 logger.error(f"Falha no pyttsx3: {e}")
 
@@ -138,31 +146,41 @@ class VoiceEngine:
             with sr.Microphone() as source:
                 recognizer.adjust_for_ambient_noise(source, duration=0.3)
 
-                # 🔔 Som de abertura
+                # Som de abertura
                 self.play_sound(START_SOUND)
-                print("🎧 [Jarvis Ouvindo...] Fale no seu tempo:")
+                try:
+                    print("[Jarvis Ouvindo...] Fale no seu tempo:")
+                except Exception:
+                    pass
 
                 audio = recognizer.listen(source, timeout=t_out, phrase_time_limit=limit)
 
-                # 🔕 Som de fechamento
+                # Som de fechamento
                 self.play_sound(STOP_SOUND)
 
-            print("⏳ [Jarvis]: Transcrevendo fala...")
+            try:
+                print("[Jarvis]: Transcrevendo fala...")
+            except Exception:
+                pass
 
-            if self.whisper_model:
+            model = self.get_whisper_model()
+            if model:
                 wav_data = io.BytesIO(audio.get_wav_data())
-                segments, info = self.whisper_model.transcribe(
+                segments, info = model.transcribe(
                     wav_data,
                     language="pt",
                     beam_size=1,
                     vad_filter=True
                 )
                 text = " ".join([segment.text for segment in segments]).strip()
-                logger.info(f"Whisper Tiny transcreveu: '{text}'")
+                logger.info(f"Whisper transcreveu: '{text}'")
             else:
                 text = recognizer.recognize_google(audio, language="pt-BR")
 
-            print(f"🗣️ [Você disse]: {text}")
+            try:
+                print(f"[Voce disse]: {text}")
+            except Exception:
+                pass
             return text if text else None
 
         except sr.WaitTimeoutError:

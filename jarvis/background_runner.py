@@ -7,8 +7,7 @@ from pathlib import Path
 import keyboard
 
 from jarvis.config import config, LOGS_DIR
-from jarvis.core.agent import JarvisAssistant
-from jarvis.voice.engine import VoiceEngine
+from jarvis.voice.engine import VoiceEngine, START_SOUND
 
 LOG_FILE = LOGS_DIR / "jarvis_background.log"
 
@@ -37,7 +36,8 @@ class SilentJarvisDaemon:
         # 2. Verifica se os modelos precisam ser baixados
         self._check_and_download_models()
 
-        # 3. Inicializa o assistente e IA
+        # 3. Inicializa o assistente e IA sob demanda
+        from jarvis.core.agent import JarvisAssistant
         self.agent = JarvisAssistant()
         self.is_processing = False
         self.running = True
@@ -51,11 +51,19 @@ class SilentJarvisDaemon:
         needs_llm = not llm_path.exists() and config.AI_PROVIDER == "local"
 
         if needs_llm:
-            logger.info("Modelo de IA não encontrado. Falando com o usuário...")
+            logger.info("Modelo de IA não encontrado. Emitindo aviso sonoro imediato...")
+            # Som de aviso imediato para dar feedback instantâneo ao usuário
+            self.voice.play_sound(START_SOUND)
             try:
-                self.voice.speak("Detectei que é a sua primeira execução. Vou baixar os modelos de inteligência artificial necessários. Por favor, aguarde alguns instantes.")
-            except Exception:
-                pass
+                # Usa pyttsx3 se disponível para resposta em 0.1s ou edge-tts
+                offline = self.voice.get_offline_engine()
+                if offline:
+                    offline.say("Detectei que é a sua primeira execução. Vou baixar os modelos de inteligência artificial necessários. Por favor, aguarde alguns instantes.")
+                    offline.runAndWait()
+                else:
+                    self.voice.speak("Detectei que é a sua primeira execução. Vou baixar os modelos de inteligência artificial necessários. Por favor, aguarde alguns instantes.")
+            except Exception as e:
+                logger.warning(f"Falha ao falar aviso inicial: {e}")
 
         def on_progress(msg: str):
             logger.info(f"[Download Status]: {msg}")
