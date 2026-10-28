@@ -65,8 +65,28 @@ class SilentJarvisDaemon:
             except Exception as e:
                 logger.warning(f"Falha ao falar aviso inicial: {e}")
 
-        def on_progress(msg: str):
+        # Controle de anúncio da porcentagem por voz em tempo real
+        spoken_milestones = set()
+
+        def on_progress(msg: str, pct: int = 0, current_mb: float = 0.0, total_mb: float = 0.0):
             logger.info(f"[Download Status]: {msg}")
+            if not needs_llm or pct <= 0:
+                return
+
+            # Fala a porcentagem a cada 10% (ex: 10%, 20%, 30%... 90%, 100%)
+            milestone = (pct // 10) * 10
+            if milestone >= 10 and milestone not in spoken_milestones:
+                spoken_milestones.add(milestone)
+                phrase = f"{milestone} por cento concluído."
+                try:
+                    offline = self.voice.get_offline_engine()
+                    if offline:
+                        offline.say(phrase)
+                        offline.runAndWait()
+                    else:
+                        self.voice.speak(phrase)
+                except Exception as e:
+                    logger.debug(f"Erro ao falar porcentagem: {e}")
 
         ensure_models_available(
             llm_model_path=llm_path,
@@ -76,7 +96,12 @@ class SilentJarvisDaemon:
 
         if needs_llm:
             try:
-                self.voice.speak("Download concluído com sucesso. Finalizando a inicialização.")
+                offline = self.voice.get_offline_engine()
+                if offline:
+                    offline.say("Download concluído com sucesso. Finalizando a inicialização.")
+                    offline.runAndWait()
+                else:
+                    self.voice.speak("Download concluído com sucesso. Finalizando a inicialização.")
             except Exception:
                 pass
 

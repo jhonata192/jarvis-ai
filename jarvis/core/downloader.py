@@ -45,16 +45,16 @@ def download_file_with_progress(
                 out_file.write(buffer)
 
                 current_mb = downloaded / (1024 * 1024)
-                if current_mb - last_logged_mb >= 50 or (total_bytes and downloaded == total_bytes):
+                if current_mb - last_logged_mb >= 20 or (total_bytes and downloaded == total_bytes):
                     last_logged_mb = current_mb
+                    pct = (downloaded / total_bytes) * 100 if total_bytes else 0
                     if total_bytes:
-                        pct = (downloaded / total_bytes) * 100
-                        msg = f"Baixando {description}: {current_mb:.1f} MB / {total_bytes / (1024*1024):.1f} MB ({pct:.1f}%)"
+                        msg = f"Baixando {description}: {current_mb:.1f} MB de {total_bytes / (1024*1024):.1f} MB ({pct:.1f}%)"
                     else:
                         msg = f"Baixando {description}: {current_mb:.1f} MB..."
                     logger.info(msg)
                     if status_callback:
-                        status_callback(msg)
+                        status_callback(msg, int(pct), current_mb, (total_bytes / (1024*1024)) if total_bytes else 0)
 
         # Move o arquivo temporário para o destino final atomicamente
         if temp_destination.exists():
