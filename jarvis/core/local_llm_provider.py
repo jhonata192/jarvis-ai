@@ -153,6 +153,15 @@ class LocalLLMProvider:
                 return synth_response["choices"][0]["message"]["content"].strip()
 
             content = message.get("content", "")
+            
+            # Se a LLM não emitiu <tool_call>, mas prometeu no texto que está verificando atualizações,
+            # executa o fallback ativo para não deixar o usuário no vácuo
+            lower_content = content.lower()
+            if any(term in lower_content for term in ["verificando se há", "verificando se existe", "verificar se há", "verificar se existe", "checar atualizações", "verificar atualizações"]):
+                logger.info("Detectada intenção de verificação no texto da LLM sem tool_call formal. Acionando check_for_updates automaticamente...")
+                tool_result = self.mcp_registry.execute_tool("check_for_updates", {})
+                return f"{tool_result}"
+
             return content.strip() if content else "Como posso ajudar, senhor?"
 
         except Exception as e:
