@@ -28,14 +28,21 @@ class LocalLLMProvider:
             )
 
         logger.info(f"Carregando Qwen 2.5 1.5B com MCP Registry autônomo...")
+        import os
+        cpu_count = os.cpu_count() or 4
+        optimal_threads = max(2, min(cpu_count - 1, 6))
+
         self.llm = Llama(
             model_path=self.model_path,
             n_ctx=2048,
-            n_threads=4,
+            n_batch=512,
+            n_threads=optimal_threads,
+            n_threads_batch=optimal_threads,
+            n_gpu_layers=int(os.environ.get("JARVIS_GPU_LAYERS", "0")),
             verbose=False
         )
         self.mcp_registry = MCPRegistry()
-        logger.info("Motor local com MCP autônomo pronto.")
+        logger.info(f"Motor local pronto ({optimal_threads} threads, batch=512).")
 
     def _extract_tool_calls(self, message: Dict[str, Any]) -> List[Dict[str, Any]]:
         calls = []

@@ -23,6 +23,16 @@ class VoiceEngine:
         self.tts_engine = config.TTS_ENGINE
         self.piper_voice = None
         self.whisper_model = None
+        self._sound_cache = {}
+        self._noise_calibrated = False
+
+        # Pré-inicializa o mixer de áudio para evitar recriação e latência nas falas
+        try:
+            import pygame
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=1024)
+        except Exception as e:
+            logger.debug(f"Aviso ao inicializar pygame mixer: {e}")
 
     def reload_piper(self):
         """Força o recarregamento da voz neural Piper (por exemplo após o término do download)."""
@@ -110,13 +120,24 @@ class VoiceEngine:
         self._speak_sapi(clean_text)
 
     def _speak_piper(self, text: str) -> bool:
-        """Sintetiza áudio via Piper TTS em memória e reproduz via pygame."""
+        """Sintetiza áudio via Piper TTS em memória e reproduz via pygame com cache de frases curtas."""
+        import pygame
+        # Reutiliza som pré-sintetizado se já estiver em cache
+        if text in self._sound_cache:
+            try:
+                sound = self._sound_cache[text]
+                sound.play()
+                while pygame.mixer.get_busy():
+                    pygame.time.Clock().tick(25)
+                return True
+            except Exception:
+                pass
+
         voice = self.get_piper_voice()
         if not voice:
             return False
         try:
             import wave
-            import pygame
             buf = io.BytesIO()
             with wave.open(buf, 'wb') as wav_file:
                 voice.synthesize_wav(text, wav_file)
@@ -124,6 +145,9 @@ class VoiceEngine:
             if not pygame.mixer.get_init():
                 pygame.mixer.init()
             sound = pygame.mixer.Sound(buf)
+            # Salva no cache se for frase curta recorrente (< 60 caracteres)
+            if len(text) < 60:
+                self._sound_cache[text] = sound
             sound.play()
             while pygame.mixer.get_busy():
                 pygame.time.Clock().tick(25)
@@ -192,7 +216,11 @@ class VoiceEngine:
 
         try:
             with sr.Microphone() as source:
-                recognizer.adjust_for_ambient_noise(source, duration=0.2)
+                # Calibra ruído apenas uma vez para não atrasar a abertura do microfone a cada chamada
+                if not self._noise_calibrated:
+                    recognizer.adjust_for_ambient_noise(source, duration=0.2)
+                    self._noise_calibrated = True
+
                 # Garante que o limiar de energia nunca fique alto demais (cortando voz suave)
                 if recognizer.energy_threshold > 250:
                     recognizer.energy_threshold = 250

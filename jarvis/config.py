@@ -43,11 +43,10 @@ class JarvisConfig(BaseSettings):
     AGY_MODEL: str = "gemini-3.8-flash-low"
     AGY_EFFORT: str = "low"
     
-    # ChromaDB RAG
+    # ChromaDB RAG (100% Offline com ONNX all-MiniLM-L6-v2)
     CHROMA_PERSIST_DIR: str = str(MEMORY_DIR)
     LEARNINGS_DIR: str = str(BASE_DIR / "data" / "learnings")
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    EMBEDDING_MODEL: str = "text-embedding-004"
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     
     # Voice Config (TTS)
     TTS_ENGINE: str = "piper"  # 'piper' (offline neural ultra-rápido) ou 'edge-tts' (online)
@@ -60,9 +59,9 @@ class JarvisConfig(BaseSettings):
     PIPER_MODEL_PATH: str = str((BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx") if (BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx").exists() else (PIPER_DIR / "pt_BR-faber-medium.onnx"))
     PIPER_CONFIG_PATH: str = str((BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx.json") if (BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx.json").exists() else (PIPER_DIR / "pt_BR-faber-medium.onnx.json"))
     
-    # Whisper STT Config (Modelo Small: alta precisão fonética em português)
+    # Whisper STT Config (Modelo Base: ultra-rápido ~3x mais veloz que small, com alta precisão)
     STT_ENGINE: str = "whisper"
-    WHISPER_MODEL_SIZE: str = "small"
+    WHISPER_MODEL_SIZE: str = "base"
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
     

@@ -101,9 +101,14 @@ class JarvisAssistant:
             else:
                 return f"Uma nova versão ({tag}) está disponível no GitHub. Peça para eu atualizar para instalar automaticamente."
 
-        # RAG Context Retrieval
+        # RAG Context Retrieval (Ignorado em comandos de ação direta para economizar ~150ms)
+        is_direct_command = any(lower.startswith(prefix) for prefix in [
+            "abra", "abrir", "inicie", "executar", "feche", "fechar", "aumente", "abaixe",
+            "volume", "desligue", "ligue", "silencie", "pause", "play", "toque", "coloque"
+        ])
+
         rag_context = ""
-        if with_rag:
+        if with_rag and not is_direct_command:
             memories = self.rag.query(user_prompt, n_results=2)
             if memories:
                 rag_context = "Contexto da Memória:\n"

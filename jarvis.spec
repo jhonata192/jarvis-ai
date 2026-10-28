@@ -15,11 +15,13 @@ datas = [
 datas += collect_data_files("faster_whisper")
 datas += collect_data_files("chromadb")
 datas += collect_data_files("piper")
+datas += collect_data_files("tokenizers")
 
 binaries = []
 binaries += collect_dynamic_libs("llama_cpp")
 binaries += collect_dynamic_libs("ctranslate2")
 binaries += collect_dynamic_libs("piper")
+binaries += collect_dynamic_libs("onnxruntime")
 
 # Coleta todos os submódulos do ChromaDB com tratamento de erro
 chromadb_submodules = [m for m in collect_submodules("chromadb") if "fastapi" not in m]
@@ -30,6 +32,11 @@ hidden_imports = [
     "chromadb",
     "chromadb.telemetry.product.posthog",
     "chromadb.telemetry.opentelemetry",
+    "chromadb.utils.embedding_functions",
+    "chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2",
+    "onnxruntime",
+    "tokenizers",
+    "tqdm",
     "piper",
     "piper.voice",
     "piper.config",

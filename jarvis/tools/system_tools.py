@@ -26,12 +26,20 @@ class SystemTools:
             "timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         }
 
-    @staticmethod
-    def get_bluetooth_devices() -> str:
+    _bt_cache: str = ""
+    _bt_cache_time: float = 0.0
+
+    @classmethod
+    def get_bluetooth_devices(cls) -> str:
         """
-        Consulta rápida de dispositivos Bluetooth conectados no Windows.
+        Consulta rápida de dispositivos Bluetooth conectados no Windows com cache de 15s.
         Retorna uma frase clara em português pronta para o Jarvis falar.
         """
+        import time
+        now = time.time()
+        if cls._bt_cache and (now - cls._bt_cache_time) < 15.0:
+            return cls._bt_cache
+
         ps_cmd = (
             'Get-PnpDevice -Class "Bluetooth" | '
             'Select-Object Status, FriendlyName | '
@@ -65,9 +73,13 @@ class SystemTools:
 
             if connected:
                 nomes = ", ".join(connected)
-                return f"Dispositivos Bluetooth conectados no momento: {nomes}."
+                result = f"Dispositivos Bluetooth conectados no momento: {nomes}."
             else:
-                return "Nenhum dispositivo Bluetooth de áudio ou periférico está conectado no momento."
+                result = "Nenhum dispositivo Bluetooth de áudio ou periférico está conectado no momento."
+
+            cls._bt_cache = result
+            cls._bt_cache_time = now
+            return result
         except Exception as e:
             return f"Erro ao verificar dispositivos Bluetooth: {e}"
 

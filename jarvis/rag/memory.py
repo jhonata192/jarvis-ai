@@ -11,45 +11,35 @@ from jarvis.config import config
 
 logger = logging.getLogger("Jarvis.RAG")
 
-class GeminiEmbeddingFunction(EmbeddingFunction):
+class OfflineLocalEmbeddingFunction(EmbeddingFunction):
     """
-    Função de embedding usando Google GenAI com fallback para representações nativas
-    quando a API Key não for fornecida.
+    Função de embedding 100% OFFLINE para o RAG do Jarvis.
+    Usa o modelo ONNXMiniLM_L6_V2 integrado do ChromaDB com download/cache local
+    e fallback determinístico para evitar interrupções caso o ONNX runtime não esteja inicializado.
     """
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
-        self.api_key = api_key or config.GEMINI_API_KEY
-        self.model = model or config.EMBEDDING_MODEL
-        self.client = None
-        
-        if self.api_key:
-            try:
-                from google import genai
-                self.client = genai.Client(api_key=self.api_key)
-                logger.info("Cliente Google GenAI configurado com sucesso para embeddings.")
-            except Exception as e:
-                logger.warning(f"Não foi possível inicializar o cliente Google GenAI: {e}")
+    def __init__(self):
+        self._onnx_fn = None
+        try:
+            from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+            self._onnx_fn = ONNXMiniLM_L6_V2()
+            logger.info("Modelo de embedding local 100% offline (all-MiniLM-L6-v2 ONNX) configurado com sucesso.")
+        except Exception as e:
+            logger.warning(f"Não foi possível carregar ONNXMiniLM_L6_V2: {e}. Usando fallback local.")
 
     def __call__(self, input: Documents) -> Embeddings:
-        if self.client:
+        if self._onnx_fn:
             try:
-                response = self.client.models.embed_content(
-                    model=self.model,
-                    contents=input
-                )
-                embeddings = [e.values for e in response.embeddings]
-                return embeddings
+                return self._onnx_fn(input)
             except Exception as e:
-                logger.error(f"Erro na API de Embeddings do Gemini: {e}. Usando fallback local.")
+                logger.error(f"Falha ao gerar embeddings ONNX: {e}. Recorrendo ao fallback determinístico.")
 
-        # Fallback local determinístico e leve (se não houver chave de API configurada no momento)
         embeddings = []
         for text in input:
-            vec = self._deterministic_vector(text, dim=768)
+            vec = self._deterministic_vector(text, dim=384)
             embeddings.append(vec)
         return embeddings
 
-    def _deterministic_vector(self, text: str, dim: int = 768) -> List[float]:
-        # Hash SHA-256 expandido para criar um vetor de teste sem travar
+    def _deterministic_vector(self, text: str, dim: int = 384) -> List[float]:
         seed = int(hashlib.md5(text.encode('utf-8')).hexdigest(), 16)
         import random
         rng = random.Random(seed)
@@ -67,7 +57,7 @@ class JarvisRAG:
         persist_path.mkdir(parents=True, exist_ok=True)
         
         self.chroma_client = chromadb.PersistentClient(path=str(persist_path))
-        self.embedding_fn = GeminiEmbeddingFunction()
+        self.embedding_fn = OfflineLocalEmbeddingFunction()
         
         self.collection = self.chroma_client.get_or_create_collection(
             name="jarvis_memory",
