@@ -12,9 +12,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Usamos %LOCALAPPDATA%\JarvisAI para gravar dados dinâmicos (logs, modelos GGUF, memória ChromaDB).
 LOCAL_APPDATA = os.environ.get("LOCALAPPDATA")
 if LOCAL_APPDATA:
-    USER_DATA_DIR = Path(LOCAL_APPDATA) / "JarvisAI"
+    USER_DATA_DIR = Path(LOCAL_APPDATA) / "Jarvis AI"
 else:
-    USER_DATA_DIR = Path.home() / ".jarvis_ai"
+    USER_DATA_DIR = Path.home() / "Jarvis AI"
 
 # Se o repositório local tiver a pasta models/ com permissão de escrita e existir, podemos usar localmente;
 # caso contrário, sempre usa USER_DATA_DIR seguro.
