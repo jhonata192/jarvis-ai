@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import urllib.request
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Callable
 
 from jarvis.config import config
 from version import VERSION as CURRENT_VERSION

@@ -28,7 +28,6 @@ class LocalLLMProvider:
             )
 
         logger.info(f"Carregando Qwen 2.5 1.5B com MCP Registry autônomo...")
-        import os
         cpu_count = os.cpu_count() or 4
         optimal_threads = max(2, min(cpu_count - 1, 6))
 

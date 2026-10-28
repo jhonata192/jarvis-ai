@@ -59,11 +59,26 @@ class JarvisRAG:
         self.chroma_client = chromadb.PersistentClient(path=str(persist_path))
         self.embedding_fn = OfflineLocalEmbeddingFunction()
         
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="jarvis_memory",
-            embedding_function=self.embedding_fn,
-            metadata={"description": "Memória de aprendizados, histórico e funções do Jarvis"}
-        )
+        try:
+            self.collection = self.chroma_client.get_or_create_collection(
+                name="jarvis_memory",
+                embedding_function=self.embedding_fn,
+                metadata={"description": "Memória de aprendizados, histórico e funções do Jarvis"}
+            )
+        except Exception as e:
+            if "dimension" in str(e).lower():
+                logger.warning(f"Mudança de dimensão de embedding detectada ({e}). Reinicializando coleção para formato offline 384d...")
+                try:
+                    self.chroma_client.delete_collection("jarvis_memory")
+                except Exception:
+                    pass
+                self.collection = self.chroma_client.get_or_create_collection(
+                    name="jarvis_memory",
+                    embedding_function=self.embedding_fn,
+                    metadata={"description": "Memória de aprendizados, histórico e funções do Jarvis"}
+                )
+            else:
+                raise e
         
         # Sincroniza arquivos de aprendizado se existirem
         self.sync_learnings_dir()
