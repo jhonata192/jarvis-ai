@@ -2,7 +2,7 @@
 import sys
 import os
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
 block_cipher = None
 
@@ -21,6 +21,28 @@ binaries += collect_dynamic_libs("llama_cpp")
 binaries += collect_dynamic_libs("ctranslate2")
 binaries += collect_dynamic_libs("piper")
 
+# Coleta todos os submódulos do ChromaDB com tratamento de erro
+chromadb_submodules = [m for m in collect_submodules("chromadb") if "fastapi" not in m]
+
+hidden_imports = [
+    "llama_cpp",
+    "faster_whisper",
+    "chromadb",
+    "chromadb.telemetry.product.posthog",
+    "chromadb.telemetry.opentelemetry",
+    "piper",
+    "piper.voice",
+    "piper.config",
+    "edge_tts",
+    "pygame",
+    "pynput",
+    "keyboard",
+    "speech_recognition",
+    "pycaw",
+    "comtypes",
+    "psutil"
+] + chromadb_submodules
+
 # Verifica se existe arquivo de versão gerado pelo build.bat
 version_file = str(BASE_DIR / "version_info.txt") if os.path.exists(BASE_DIR / "version_info.txt") else None
 
@@ -29,24 +51,7 @@ a = Analysis(
     pathex=[str(BASE_DIR)],
     binaries=binaries,
     datas=datas,
-    hiddenimports=[
-        "llama_cpp",
-        "faster_whisper",
-        "chromadb",
-        "chromadb.api.segment",
-        "chromadb.db.impl.sqlite",
-        "piper",
-        "piper.voice",
-        "piper.config",
-        "edge_tts",
-        "pygame",
-        "pynput",
-        "keyboard",
-        "speech_recognition",
-        "pycaw",
-        "comtypes",
-        "psutil"
-    ],
+    hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

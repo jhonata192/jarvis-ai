@@ -1,5 +1,9 @@
 import os
 import sys
+
+# Desativa telemetria do ChromaDB para evitar tentar carregar posthog
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 import time
 import logging
 import threading
