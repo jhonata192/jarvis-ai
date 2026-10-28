@@ -39,10 +39,11 @@ class LocalLLMProvider:
             n_threads=optimal_threads,
             n_threads_batch=optimal_threads,
             n_gpu_layers=int(os.environ.get("JARVIS_GPU_LAYERS", "0")),
+            chat_format="chatml",
             verbose=False
         )
         self.mcp_registry = MCPRegistry()
-        logger.info(f"Motor local pronto ({optimal_threads} threads, batch=512).")
+        logger.info(f"Motor local pronto ({optimal_threads} threads, batch=512, chat_format=chatml).")
 
     def _extract_tool_calls(self, message: Dict[str, Any]) -> List[Dict[str, Any]]:
         calls = []
@@ -153,15 +154,6 @@ class LocalLLMProvider:
                 return synth_response["choices"][0]["message"]["content"].strip()
 
             content = message.get("content", "")
-            
-            # Se a LLM não emitiu <tool_call>, mas prometeu no texto que está verificando atualizações,
-            # executa o fallback ativo para não deixar o usuário no vácuo
-            lower_content = content.lower()
-            if any(term in lower_content for term in ["verificando se há", "verificando se existe", "verificar se há", "verificar se existe", "checar atualizações", "verificar atualizações"]):
-                logger.info("Detectada intenção de verificação no texto da LLM sem tool_call formal. Acionando check_for_updates automaticamente...")
-                tool_result = self.mcp_registry.execute_tool("check_for_updates", {})
-                return f"{tool_result}"
-
             return content.strip() if content else "Como posso ajudar, senhor?"
 
         except Exception as e:
