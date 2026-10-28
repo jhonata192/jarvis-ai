@@ -183,3 +183,16 @@ def open_app_or_website(target: str) -> str:
         return f"Aplicativo '{target}' aberto com sucesso."
     except Exception as e:
         return f"Erro ao abrir {target}: {e}"
+
+def check_for_updates() -> str:
+    """Verifica no GitHub se existe uma versão mais recente do Jarvis AI e retorna o status."""
+    try:
+        from jarvis.core.updater import JarvisUpdater
+        updater = JarvisUpdater()
+        info = updater.check_for_update()
+        if not info:
+            return f"O Jarvis já está em sua versão mais recente ({updater.current_version}). Nenhuma atualização pendente."
+        tag = info.get("tag_name", "")
+        return f"Uma nova versão ({tag}) está disponível no GitHub. A sua versão atual é {updater.current_version}."
+    except Exception as e:
+        return f"Erro ao verificar atualizações: {e}"

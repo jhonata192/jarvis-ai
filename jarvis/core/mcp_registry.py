@@ -19,7 +19,8 @@ class MCPRegistry:
             "set_system_volume": mcp_system.set_system_volume,
             "get_battery_status": mcp_system.get_battery_status,
             "get_hardware_telemetry": mcp_system.get_hardware_telemetry,
-            "open_app_or_website": mcp_system.open_app_or_website
+            "open_app_or_website": mcp_system.open_app_or_website,
+            "check_for_updates": mcp_system.check_for_updates
         }
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
@@ -99,6 +100,14 @@ class MCPRegistry:
                         },
                         "required": ["target"]
                     }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "check_for_updates",
+                    "description": "Verifica se existe uma nova versão ou atualização do Jarvis AI disponível no GitHub.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             }
         ]

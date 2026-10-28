@@ -24,6 +24,11 @@ class VoiceEngine:
         self.piper_voice = None
         self.whisper_model = None
 
+    def reload_piper(self):
+        """Força o recarregamento da voz neural Piper (por exemplo após o término do download)."""
+        self.piper_voice = None
+        return self.get_piper_voice()
+
     def get_piper_voice(self):
         """Inicializa Piper TTS sob demanda (lazy loading)."""
         if self.piper_voice is None:
@@ -36,10 +41,11 @@ class VoiceEngine:
                     self.piper_voice = PiperVoice.load(model_path, config_path)
                     logger.info("Voz neural Piper carregada com sucesso.")
                 except Exception as e:
-                    logger.warning(f"Falha ao carregar Piper TTS: {e}")
+                    logger.exception(f"Falha ao carregar Piper TTS: {e}")
                     self.piper_voice = False
             else:
-                self.piper_voice = False
+                # Arquivos ainda não existem (em download); não define False definitivo
+                return None
         return self.piper_voice if self.piper_voice is not False else None
 
     def get_whisper_model(self):

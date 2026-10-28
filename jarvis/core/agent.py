@@ -54,7 +54,7 @@ class JarvisAssistant:
             )
 
         # ⚡ Fast-Path de Atualização do Jarvis
-        if any(w in lower for w in ["atualização", "atualizar", "atualize", "update", "nova versão"]):
+        if any(w in lower for w in ["atualização", "atualizações", "atualizacao", "atualizacoes", "atualizar", "atualize", "update", "nova versão", "nova versao"]):
             from jarvis.core.updater import JarvisUpdater
             updater = JarvisUpdater()
             info = updater.check_for_update()

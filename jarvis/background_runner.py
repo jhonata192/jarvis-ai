@@ -109,6 +109,8 @@ class SilentJarvisDaemon:
         )
 
         if needs_llm or needs_piper:
+            if needs_piper:
+                self.voice.reload_piper()
             try:
                 self.voice.speak("Download concluído com sucesso. Finalizando a inicialização.")
             except Exception:
