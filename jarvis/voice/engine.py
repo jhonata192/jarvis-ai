@@ -182,17 +182,22 @@ class VoiceEngine:
         recognizer = sr.Recognizer()
         
         # Parâmetros de tolerância para não cortar a fala do usuário
-        recognizer.energy_threshold = 280
-        recognizer.dynamic_energy_threshold = True
-        recognizer.pause_threshold = config.MIC_PAUSE_THRESHOLD          # 1.3 segundos de silêncio para fechar
-        recognizer.non_speaking_duration = 0.5
+        recognizer.energy_threshold = config.MIC_ENERGY_THRESHOLD
+        recognizer.dynamic_energy_threshold = False  # Evita que o limiar suba sozinho enquanto você fala
+        recognizer.pause_threshold = config.MIC_PAUSE_THRESHOLD          # Espera 2.0s de silêncio para fechar
+        recognizer.non_speaking_duration = config.MIC_NON_SPEAKING_DURATION
 
         t_out = timeout or config.MIC_LISTEN_TIMEOUT
         limit = phrase_time_limit or config.MIC_PHRASE_TIME_LIMIT
 
         try:
             with sr.Microphone() as source:
-                recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                recognizer.adjust_for_ambient_noise(source, duration=0.2)
+                # Garante que o limiar de energia nunca fique alto demais (cortando voz suave)
+                if recognizer.energy_threshold > 250:
+                    recognizer.energy_threshold = 250
+                elif recognizer.energy_threshold < 100:
+                    recognizer.energy_threshold = 100
 
                 # Som de abertura
                 self.play_sound(START_SOUND)

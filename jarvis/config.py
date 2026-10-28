@@ -66,10 +66,12 @@ class JarvisConfig(BaseSettings):
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
     
-    # Configurações do Microfone (Tolerância confortável para pausas na fala)
-    MIC_PAUSE_THRESHOLD: float = 1.4      # Espera 1.4s de silêncio para ter certeza que encerrou
-    MIC_PHRASE_TIME_LIMIT: int = 30       # Permite frases longas e complexas
-    MIC_LISTEN_TIMEOUT: int = 8           # Tempo para iniciar a fala
+    # Configurações do Microfone (Tolerância ampla para pausas naturais na fala sem cortar o usuário)
+    MIC_PAUSE_THRESHOLD: float = 2.0      # Espera 2.0s de silêncio contínuo para considerar que a fala terminou
+    MIC_NON_SPEAKING_DURATION: float = 0.8 # Janela de silêncio exigida após falar
+    MIC_ENERGY_THRESHOLD: int = 150       # Sensibilidade alta para microfones mais baixos
+    MIC_PHRASE_TIME_LIMIT: int = 45       # Permite comandos longos sem interrupção
+    MIC_LISTEN_TIMEOUT: int = 10          # Tempo para começar a falar
     
     # Daemon / Shortcuts
     HOTKEY_LISTEN: str = "ctrl+alt+j"
