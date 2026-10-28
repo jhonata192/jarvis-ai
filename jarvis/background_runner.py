@@ -69,9 +69,22 @@ class SilentJarvisDaemon:
         # Controle de anúncio da porcentagem por voz a cada 5 segundos
         last_spoken_time = [0.0]
         last_spoken_pct = [-1]
+        current_item = [None]
 
-        def on_progress(msg: str, pct: int = 0, current_mb: float = 0.0, total_mb: float = 0.0):
+        def on_progress(msg: str, pct: int = 0, current_mb: float = 0.0, total_mb: float = 0.0, description: str = ""):
             logger.info(f"[Download Status]: {msg}")
+            
+            # Se mudou o arquivo/item que está sendo baixado, anuncia o que é
+            if description and description != current_item[0]:
+                current_item[0] = description
+                last_spoken_pct[0] = -1
+                last_spoken_time[0] = time.time()
+                try:
+                    self.voice.speak(f"Iniciando download: {description}.")
+                except Exception as e:
+                    logger.debug(f"Erro ao falar início de download: {e}")
+                return
+
             if pct <= 0:
                 return
 
@@ -80,7 +93,8 @@ class SilentJarvisDaemon:
             if now - last_spoken_time[0] >= 5.0 and pct != last_spoken_pct[0]:
                 last_spoken_time[0] = now
                 last_spoken_pct[0] = pct
-                phrase = f"{pct} por cento concluído."
+                item_prefix = f"{current_item[0]}: " if current_item[0] else ""
+                phrase = f"{item_prefix}{pct} por cento concluído."
                 try:
                     self.voice.speak(phrase)
                 except Exception as e:

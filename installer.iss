@@ -28,6 +28,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
+DisableDirPage=yes
 PrivilegesRequired=lowest
 CloseApplications=yes
 CloseApplicationsFilter=JarvisAI.exe

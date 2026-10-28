@@ -24,7 +24,7 @@ def download_file_with_progress(
     temp_destination = destination.with_suffix(destination.suffix + ".download")
 
     if status_callback:
-        status_callback(f"Iniciando download de {description}...")
+        status_callback(f"Iniciando download de {description}...", 0, 0.0, 0.0, description)
     logger.info(f"Baixando de {url} para {destination}...")
 
     try:
@@ -56,7 +56,7 @@ def download_file_with_progress(
                         msg = f"Baixando {description}: {current_mb:.1f} MB..."
                     logger.debug(msg)
                     if status_callback:
-                        status_callback(msg, int(pct), current_mb, (total_bytes / (1024*1024)) if total_bytes else 0)
+                        status_callback(msg, int(pct), current_mb, (total_bytes / (1024*1024)) if total_bytes else 0, description)
 
         # Move o arquivo temporário para o destino final atomicamente
         if temp_destination.exists():
@@ -66,7 +66,7 @@ def download_file_with_progress(
         
         logger.info(f"{description} baixado com sucesso em: {destination}")
         if status_callback:
-            status_callback(f"{description} instalado com sucesso!")
+            status_callback(f"{description} instalado com sucesso!", 100, current_mb, current_mb, description)
 
     except Exception as e:
         logger.error(f"Erro ao baixar {description} de {url}: {e}")
@@ -93,19 +93,17 @@ def ensure_models_available(
     if piper_model_path and piper_config_path:
         if not piper_model_path.exists() or not piper_config_path.exists():
             logger.info("Voz Piper TTS não encontrada. Baixando modelo neural de voz...")
-            if status_callback:
-                status_callback("Baixando voz neural em português...")
             download_file_with_progress(
                 url=PIPER_MODEL_URL,
                 destination=piper_model_path,
-                description="Voz Neural Piper (pt-BR)",
+                description="Voz Neural em Português",
                 status_callback=status_callback
             )
             download_file_with_progress(
                 url=PIPER_CONFIG_URL,
                 destination=piper_config_path,
-                description="Configuração da Voz Piper",
-                status_callback=status_callback
+                description="Voz Neural em Português",
+                status_callback=None
             )
         else:
             logger.info(f"Voz Piper verificada: {piper_model_path}")
@@ -113,12 +111,10 @@ def ensure_models_available(
     # 2. Verificar e baixar o modelo LLM GGUF
     if not llm_model_path.exists():
         logger.info(f"Modelo LLM não encontrado em: {llm_model_path}")
-        if status_callback:
-            status_callback("O modelo de inteligência artificial não foi encontrado. Iniciando download automático...")
         download_file_with_progress(
             url=QWEN_MODEL_URL,
             destination=llm_model_path,
-            description="Modelo Qwen 2.5 1.5B (IA Local)",
+            description="Modelo de Inteligência Artificial",
             status_callback=status_callback
         )
     else:
