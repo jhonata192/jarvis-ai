@@ -50,8 +50,8 @@ class VoiceEngine:
                     logger.info(f"Carregando voz neural Piper ({config.PIPER_MODEL_NAME})...")
                     self.piper_voice = PiperVoice.load(model_path, config_path)
                     logger.info("Voz neural Piper carregada com sucesso.")
-                except Exception as e:
-                    logger.exception(f"Falha ao carregar Piper TTS: {e}")
+                except (OSError, Exception) as e:
+                    logger.warning(f"Voz neural Piper não suportada nesta CPU ({e}). Usando síntese de voz alternativa.")
                     self.piper_voice = False
             else:
                 # Arquivos ainda não existem (em download); não define False definitivo
@@ -59,7 +59,7 @@ class VoiceEngine:
         return self.piper_voice if self.piper_voice is not False else None
 
     def get_whisper_model(self):
-        """Inicializa o modelo Whisper sob demanda (lazy loading) para inicialização instantânea."""
+        """Inicializa o modelo Whisper sob demanda (lazy loading) com fallback seguro para qualquer CPU."""
         if self.whisper_model is None and config.STT_ENGINE == "whisper":
             try:
                 from faster_whisper import WhisperModel
@@ -70,9 +70,10 @@ class VoiceEngine:
                     compute_type=config.WHISPER_COMPUTE_TYPE
                 )
                 logger.info("Modelo Whisper pronto.")
-            except Exception as e:
-                logger.error(f"Falha ao carregar faster-whisper: {e}")
-        return self.whisper_model
+            except (OSError, Exception) as e:
+                logger.warning(f"Whisper local indisponível para esta CPU ({e}). Usando reconhecimento de fala universal.")
+                self.whisper_model = False
+        return self.whisper_model if self.whisper_model is not False else None
 
     def play_sound(self, sound_path: Path):
         """Reproduz um som de efeito (beep) curto via pygame."""
@@ -152,8 +153,9 @@ class VoiceEngine:
             while pygame.mixer.get_busy():
                 pygame.time.Clock().tick(25)
             return True
-        except Exception as e:
-            logger.error(f"Erro na síntese do Piper TTS: {e}")
+        except (OSError, Exception) as e:
+            logger.warning(f"Erro na síntese do Piper TTS ({e}). Alternando para sintetizador universal.")
+            self.piper_voice = False
             return False
 
     def _speak_sapi(self, text: str):
@@ -245,18 +247,29 @@ class VoiceEngine:
                 pass
 
             model = self.get_whisper_model()
+            text = None
             if model:
-                wav_data = io.BytesIO(audio.get_wav_data())
-                segments, info = model.transcribe(
-                    wav_data,
-                    language="pt",
-                    beam_size=1,
-                    vad_filter=True
-                )
-                text = " ".join([segment.text for segment in segments]).strip()
-                logger.info(f"Whisper transcreveu: '{text}'")
-            else:
-                text = recognizer.recognize_google(audio, language="pt-BR")
+                try:
+                    wav_data = io.BytesIO(audio.get_wav_data())
+                    segments, info = model.transcribe(
+                        wav_data,
+                        language="pt",
+                        beam_size=1,
+                        vad_filter=True
+                    )
+                    text = " ".join([segment.text for segment in segments]).strip()
+                    logger.info(f"Whisper transcreveu: '{text}'")
+                except (OSError, Exception) as e:
+                    logger.warning(f"Transcrição Whisper falhou ({e}). Recorrendo ao reconhecedor universal.")
+                    self.whisper_model = False
+                    text = None
+
+            if not text:
+                try:
+                    text = recognizer.recognize_google(audio, language="pt-BR")
+                except Exception as e:
+                    logger.warning(f"Reconhecimento Google falhou: {e}")
+                    text = None
 
             try:
                 print(f"[Voce disse]: {text}")

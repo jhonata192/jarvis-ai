@@ -23,15 +23,15 @@ class OfflineLocalEmbeddingFunction(EmbeddingFunction):
             from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
             self._onnx_fn = ONNXMiniLM_L6_V2()
             logger.info("Modelo de embedding local 100% offline (all-MiniLM-L6-v2 ONNX) configurado com sucesso.")
-        except Exception as e:
-            logger.warning(f"Não foi possível carregar ONNXMiniLM_L6_V2: {e}. Usando fallback local.")
+        except (OSError, Exception) as e:
+            logger.warning(f"Não foi possível carregar ONNXMiniLM_L6_V2: {e}. Usando fallback local universal.")
 
     def __call__(self, input: Documents) -> Embeddings:
         if self._onnx_fn:
             try:
                 return self._onnx_fn(input)
-            except Exception as e:
-                logger.error(f"Falha ao gerar embeddings ONNX: {e}. Recorrendo ao fallback determinístico.")
+            except (OSError, Exception) as e:
+                logger.error(f"Falha ao gerar embeddings ONNX: {e}. Recorrendo ao fallback determinístico universal.")
 
         embeddings = []
         for text in input:

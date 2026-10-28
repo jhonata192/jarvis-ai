@@ -63,7 +63,7 @@ class JarvisConfig(BaseSettings):
     STT_ENGINE: str = "whisper"
     WHISPER_MODEL_SIZE: str = "base"
     WHISPER_DEVICE: str = "cpu"
-    WHISPER_COMPUTE_TYPE: str = "int8"
+    WHISPER_COMPUTE_TYPE: str = "default"  # 'default' funciona em 100% dos processadores x86/x64
     
     # Configurações do Microfone (Tolerância ampla para pausas naturais na fala sem cortar o usuário)
     MIC_PAUSE_THRESHOLD: float = 2.0      # Espera 2.0s de silêncio contínuo para considerar que a fala terminou

@@ -102,13 +102,16 @@ class SilentJarvisDaemon:
                 except Exception as e:
                     logger.debug(f"Erro ao falar porcentagem: {e}")
 
-        ensure_models_available(
-            llm_model_path=llm_path,
-            whisper_model_size=config.WHISPER_MODEL_SIZE,
-            piper_model_path=piper_path,
-            piper_config_path=piper_cfg_path,
-            status_callback=on_progress
-        )
+        try:
+            ensure_models_available(
+                llm_model_path=llm_path,
+                whisper_model_size=config.WHISPER_MODEL_SIZE,
+                piper_model_path=piper_path,
+                piper_config_path=piper_cfg_path,
+                status_callback=on_progress
+            )
+        except (OSError, Exception) as e:
+            logger.warning(f"Aviso durante a verificação de modelos locais ({e}). Jarvis continuará em modo universal.")
 
         if needs_llm or needs_piper:
             if needs_piper:

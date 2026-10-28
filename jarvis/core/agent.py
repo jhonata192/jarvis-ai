@@ -25,14 +25,23 @@ class JarvisAssistant:
     """
 
     def __init__(self, voice=None):
-        self.rag = JarvisRAG()
+        try:
+            self.rag = JarvisRAG()
+        except (OSError, Exception) as e:
+            logger.warning(f"RAG ChromaDB inicializado em modo reduzido: {e}")
+            self.rag = None
+
         self.tools = SystemTools()
         self.voice = voice
         self.provider_type = config.AI_PROVIDER
         
         if self.provider_type == "local":
             logger.info("Inicializando Jarvis com Motor de IA Local (100% Offline)...")
-            self.llm = LocalLLMProvider(config.LOCAL_MODEL_PATH)
+            try:
+                self.llm = LocalLLMProvider(config.LOCAL_MODEL_PATH)
+            except (OSError, Exception) as e:
+                logger.warning(f"Falha ao instanciar LocalLLMProvider ({e}). Usando modo de compatibilidade universal.")
+                self.llm = None
         else:
             logger.info("Inicializando Jarvis com Motor AGY CLI...")
             self.llm = AgyProvider()
@@ -115,26 +124,45 @@ class JarvisAssistant:
         ])
 
         rag_context = ""
-        if with_rag and not is_direct_command:
-            memories = self.rag.query(user_prompt, n_results=2)
-            if memories:
-                rag_context = "Contexto da Memória:\n"
-                for i, m in enumerate(memories, 1):
-                    rag_context += f"- {m['content']}\n"
-                rag_context += "\n"
+        if with_rag and not is_direct_command and self.rag is not None:
+            try:
+                memories = self.rag.query(user_prompt, n_results=2)
+                if memories:
+                    rag_context = "Contexto da Memória:\n"
+                    for i, m in enumerate(memories, 1):
+                        rag_context += f"- {m['content']}\n"
+                    rag_context += "\n"
+            except Exception as e:
+                logger.debug(f"Falha ao consultar memórias RAG: {e}")
 
         prompt_with_context = f"{rag_context}Pergunta do usuário: {user_prompt}"
 
         # Memorização automática
-        if any(trigger in lower for trigger in ["aprenda que", "lembre-se que", "guarde isso", "grave isso", "salve que"]):
-            self.rag.add_knowledge(text=user_prompt, category="aprendizado_usuario")
+        if self.rag is not None and any(trigger in lower for trigger in ["aprenda que", "lembre-se que", "guarde isso", "grave isso", "salve que"]):
+            try:
+                self.rag.add_knowledge(text=user_prompt, category="aprendizado_usuario")
+            except Exception as e:
+                logger.debug(f"Falha ao gravar memória: {e}")
 
         # Inferência
-        return self.llm.generate(
-            prompt=prompt_with_context,
-            system_instruction=JARVIS_SYSTEM_PROMPT
-        )
+        if self.llm is not None:
+            return self.llm.generate(
+                prompt=prompt_with_context,
+                system_instruction=JARVIS_SYSTEM_PROMPT
+            )
+        else:
+            from jarvis.core.local_llm_provider import LocalLLMProvider
+            dummy = LocalLLMProvider.__new__(LocalLLMProvider)
+            dummy.mcp_registry = from_agent_mcp() if 'from_agent_mcp' in locals() else None
+            from jarvis.core.mcp_registry import MCPRegistry
+            dummy.mcp_registry = MCPRegistry()
+            return dummy._fallback_generate(user_prompt)
 
     def learn(self, title_or_category: str, content: str) -> str:
-        doc_id = self.rag.add_knowledge(text=content, category=title_or_category)
-        return f"Aprendizado registrado com sucesso na memória persistente (ID: {doc_id})."
+        if self.rag:
+            try:
+                doc_id = self.rag.add_knowledge(text=content, category=title_or_category)
+                return f"Aprendizado registrado com sucesso na memória persistente (ID: {doc_id})."
+            except Exception as e:
+                return f"Não foi possível salvar na memória no momento: {e}"
+        return "Memória persistente operando em modo leve."
