@@ -55,10 +55,12 @@ class SilentJarvisDaemon:
         piper_path = Path(config.PIPER_MODEL_PATH)
         piper_cfg_path = Path(config.PIPER_CONFIG_PATH)
 
+        embedding_cache = Path.home() / ".cache" / "chroma" / "onnx_models" / "all-MiniLM-L6-v2" / "onnx" / "model.onnx"
+        needs_embedding = not embedding_cache.exists()
         needs_llm = not llm_path.exists() and config.AI_PROVIDER == "local"
         needs_piper = (not piper_path.exists() or not piper_cfg_path.exists()) and config.TTS_ENGINE == "piper"
 
-        if needs_llm or needs_piper:
+        if needs_llm or needs_piper or needs_embedding:
             logger.info("Modelos locais ausentes. Emitindo aviso sonoro imediato...")
             self.voice.play_sound(START_SOUND)
             try:
