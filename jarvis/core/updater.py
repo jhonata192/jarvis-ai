@@ -114,21 +114,25 @@ class JarvisUpdater:
 
             logger.info(f"Instalador da nova versão baixado com sucesso em: {installer_file}")
 
-            # Executa o instalador Inno Setup no modo silencioso (/SILENT /NORESTART)
-            # O Inno Setup fecha qualquer processo residual, substitui os arquivos e reinicia
-            cmd = f'start "" "{installer_file}" /SILENT /NORESTART'
-            subprocess.Popen(
-                cmd,
-                shell=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            # Cria comando PowerShell desacoplado que espera 3s (para a voz terminar), 
+            # mata qualquer processo JarvisAI.exe residual para liberar os arquivos .exe/.dll,
+            # executa o instalador Inno Setup silenciosamente (/SILENT /NORESTART) e encerra.
+            ps_script = (
+                "Start-Sleep -Seconds 3; "
+                "Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; "
+                f"Start-Process -FilePath '{installer_file}' -ArgumentList '/SILENT', '/NORESTART' -Wait"
             )
-            logger.info("Instalador da atualização disparado. Encerrando processo atual do Jarvis para liberar o .exe...")
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
+                creationflags=subprocess.CREATE_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0x00000008) if os.name == "nt" else 0
+            )
+            logger.info("Script de atualização e encerramento desacoplado disparado com sucesso.")
 
-            # Dá 6 segundos para a voz concluir a fala de encerramento e o instalador iniciar
+            # Encerra o processo Python atual em 3.5 segundos
             import threading
             def _exit_jarvis():
                 import time
-                time.sleep(6)
+                time.sleep(3.5)
                 os._exit(0)
 
             threading.Thread(target=_exit_jarvis, daemon=True).start()

@@ -59,9 +59,9 @@ class JarvisConfig(BaseSettings):
     PIPER_MODEL_PATH: str = str((BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx") if (BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx").exists() else (PIPER_DIR / "pt_BR-faber-medium.onnx"))
     PIPER_CONFIG_PATH: str = str((BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx.json") if (BASE_DIR / "models" / "piper" / "pt_BR-faber-medium.onnx.json").exists() else (PIPER_DIR / "pt_BR-faber-medium.onnx.json"))
     
-    # Whisper STT Config (Modelo Base: ultra-rápido ~3x mais veloz que small, com alta precisão)
+    # Whisper STT Config (Modelo Small: alta precisão para termos técnicos e português)
     STT_ENGINE: str = "whisper"
-    WHISPER_MODEL_SIZE: str = "base"
+    WHISPER_MODEL_SIZE: str = "small"
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "default"  # 'default' funciona em 100% dos processadores x86/x64
     

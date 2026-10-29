@@ -255,7 +255,8 @@ class VoiceEngine:
                         wav_data,
                         language="pt",
                         beam_size=1,
-                        vad_filter=True
+                        vad_filter=True,
+                        initial_prompt="Jarvis, Bluetooth, status, volume, atualizar, sistema"
                     )
                     text = " ".join([segment.text for segment in segments]).strip()
                     logger.info(f"Whisper transcreveu: '{text}'")
