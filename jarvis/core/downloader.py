@@ -7,7 +7,7 @@ from typing import Callable, Optional
 
 logger = logging.getLogger("Jarvis.Downloader")
 
-QWEN_MODEL_URL = "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+HERMES_MODEL_URL = "https://huggingface.co/bartowski/Hermes-3-Llama-3.2-3B-GGUF/resolve/main/Hermes-3-Llama-3.2-3B-Q4_K_M.gguf"
 PIPER_MODEL_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx"
 PIPER_CONFIG_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/pt_BR-faber-medium.onnx.json"
 EMBEDDING_MODEL_URL = "https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz"
@@ -139,13 +139,14 @@ def ensure_models_available(
     if not llm_model_path.exists():
         logger.info(f"Modelo LLM não encontrado em: {llm_model_path}")
         download_file_with_progress(
-            url=QWEN_MODEL_URL,
+            url=HERMES_MODEL_URL,
             destination=llm_model_path,
-            description="Modelo de Inteligência Artificial",
+            description="Modelo de Inteligência Artificial (Hermes 3 3B)",
             status_callback=status_callback
         )
     else:
         logger.info(f"Modelo LLM verificado: {llm_model_path}")
+
 
     # 4. Verificar e baixar o modelo Faster-Whisper
     # O faster_whisper faz cache automático no huggingface hub / cache local

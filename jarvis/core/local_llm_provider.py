@@ -19,11 +19,11 @@ class LocalLLMProvider:
         self.model_path = str(model_path or config.LOCAL_MODEL_PATH)
         if not os.path.exists(self.model_path):
             logger.info(f"Modelo GGUF não encontrado em {self.model_path}. Iniciando download automático...")
-            from jarvis.core.downloader import download_file_with_progress, QWEN_MODEL_URL
+            from jarvis.core.downloader import download_file_with_progress, HERMES_MODEL_URL
             download_file_with_progress(
-                url=QWEN_MODEL_URL,
+                url=HERMES_MODEL_URL,
                 destination=Path(self.model_path),
-                description="Modelo Qwen 2.5 1.5B (GGUF)"
+                description="Modelo Hermes 3 - Llama 3.2 3B (GGUF)"
             )
 
         self.mcp_registry = MCPRegistry()
@@ -32,7 +32,8 @@ class LocalLLMProvider:
 
         try:
             from llama_cpp import Llama
-            logger.info("Carregando Qwen 2.5 1.5B com MCP Registry autônomo...")
+            logger.info("Carregando Hermes 3 (Llama 3.2 3B) com MCP Registry autônomo...")
+
             cpu_count = os.cpu_count() or 4
             optimal_threads = max(2, min(cpu_count - 1, 6))
 
@@ -68,13 +69,15 @@ class LocalLLMProvider:
                 calls.append({"name": name, "arguments": args})
             return calls
 
-        # 2. Tag nativa do Qwen 2.5: <tool_call> ... </tool_call>
         content = message.get("content", "")
-        if content and "<tool_call>" in content:
+        if not content:
+            return calls
+
+        # 2. Tag nativa Hermes / Qwen: <tool_call> ... </tool_call>
+        if "<tool_call>" in content:
             matches = re.findall(r'<tool_call>(.*?)</tool_call>', content, re.DOTALL)
             for m in matches:
                 clean_json = m.strip()
-                # Corrige chaves duplas acidentais que o modelo às vezes gera {{...}}
                 if clean_json.startswith("{{") and clean_json.endswith("}}"):
                     clean_json = clean_json[1:-1]
                 elif clean_json.startswith("{{") and not clean_json.endswith("}}"):
@@ -87,7 +90,6 @@ class LocalLLMProvider:
                     if name:
                         calls.append({"name": name, "arguments": args})
                 except Exception:
-                    # Fallback com Regex robusto se o JSON vier com pequenos defeitos
                     fn_match = re.search(r'"name":\s*"([^"]+)"', clean_json)
                     if fn_match:
                         tool_name = fn_match.group(1)
@@ -103,7 +105,34 @@ class LocalLLMProvider:
                             tool_args["target"] = target_match.group(1)
                         calls.append({"name": tool_name, "arguments": tool_args})
 
+        # 3. Bloco Markdown ```json ... ``` com chamada de ferramenta
+        if not calls and "```json" in content:
+            matches = re.findall(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+            for m in matches:
+                clean_json = m.strip()
+                try:
+                    parsed = json.loads(clean_json)
+                    if isinstance(parsed, dict):
+                        # Caso {"name": "...", "arguments": {...}}
+                        if "name" in parsed and (parsed["name"] in self.mcp_registry.tools_map):
+                            calls.append({"name": parsed["name"], "arguments": parsed.get("arguments", {})})
+                        # Caso {"tool_call": {"name": ...}}
+                        elif "tool_call" in parsed and isinstance(parsed["tool_call"], dict):
+                            tc = parsed["tool_call"]
+                            if "name" in tc:
+                                calls.append({"name": tc["name"], "arguments": tc.get("arguments", {})})
+                except Exception:
+                    pass
+
+        # 4. JSON puro direto no corpo da mensagem
+        if not calls and "{" in content and "}" in content:
+            for tool_name in self.mcp_registry.tools_map.keys():
+                if f'"{tool_name}"' in content or f"'{tool_name}'" in content:
+                    calls.append({"name": tool_name, "arguments": {}})
+                    break
+
         return calls
+
 
     def generate(self, prompt: str, system_instruction: Optional[str] = None, max_steps: int = 4) -> str:
         """
@@ -185,8 +214,8 @@ class LocalLLMProvider:
                     "vou checar", "vou conferir", "vou tentar"
                 ])
 
-                if step == 1 and (conversational_evasion or (has_action_intent and not detected_calls)):
-                    logger.warning("[Warden Alert] A IA gerou texto conversacional para uma ordem prática de sistema. Forçando execução da ferramenta MCP.")
+                if step <= 2 and (conversational_evasion or (has_action_intent and not detected_calls)):
+                    logger.warning(f"[Warden Alert Step {step}] A IA ainda não acionou a ferramenta MCP para a ordem do operador. Forçando execução.")
                     messages.append({
                         "role": "assistant",
                         "content": content
@@ -194,11 +223,12 @@ class LocalLLMProvider:
                     messages.append({
                         "role": "user",
                         "content": (
-                            "[Warden Constraint]: Você apenas descreveu a intenção em texto ou conversou, mas NENHUMA ferramenta MCP foi acionada. "
-                            "É estritamente proibido falar antes de executar a ação. Emita a ferramenta MCP adequada agora em formato <tool_call>."
+                            "[Warden Constraint]: Você ainda NÃO acionou a ferramenta MCP necessária. "
+                            "Não responda com texto explicativo nem JSON de observação. Emita a ferramenta adequada imediatamente no formato: <tool_call> {\"name\": \"<nome_da_ferramenta>\", \"arguments\": {}} </tool_call>"
                         )
                     })
                     continue
+
 
 
                 # Se não há mais tool calls e o modelo produziu a resposta final
