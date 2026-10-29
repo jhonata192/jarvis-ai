@@ -105,13 +105,14 @@ class LocalLLMProvider:
 
         return calls
 
-    def generate(self, prompt: str, system_instruction: Optional[str] = None) -> str:
+    def generate(self, prompt: str, system_instruction: Optional[str] = None, max_steps: int = 4) -> str:
         """
-        Ciclo autônomo completo:
-        1. A LLM recebe o prompt e as ferramentas MCP.
-        2. A LLM decide se precisa de uma ferramenta e emite a chamada.
-        3. O Python executa a ferramenta MCP no Windows e devolve o resultado.
-        4. A LLM sintetiza a resposta final em português para o usuário.
+        Agentic Warden Loop (estilo Claude Code / Hermes-Agent / OpenCode):
+        1. Inicia com o System Prompt e as ferramentas MCP disponíveis.
+        2. Executa um loop ReAct (Raciocínio -> Ação -> Observação -> Raciocínio) de até max_steps.
+        3. Warden Supervision: Se o modelo gerar promessas conversacionais para comandos imperativos
+           sem emitir tool_call, o Warden força a emissão da chamada de ferramenta.
+        4. O ciclo encerra quando o modelo atinge o objetivo e sintetiza a resposta final.
         """
         tools = self.mcp_registry.get_tool_schemas()
         messages = []
@@ -124,51 +125,81 @@ class LocalLLMProvider:
             return self._fallback_generate(prompt)
 
         try:
-            logger.info("A LLM está avaliando o comando e as ferramentas MCP disponíveis...")
-            
-            response = self.llm.create_chat_completion(
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                max_tokens=256,
-                temperature=0.2
-            )
+            step = 0
+            while step < max_steps:
+                step += 1
+                logger.info(f"[Warden Step {step}/{max_steps}] Avaliando plano de ação e ferramentas MCP...")
 
-            choice = response["choices"][0]
-            message = choice["message"]
-
-            detected_calls = self._extract_tool_calls(message)
-
-            if detected_calls:
-                call_info = detected_calls[0]
-                tool_name = call_info["name"]
-                tool_args = call_info["arguments"]
-
-                logger.info(f"A LLM decidiu autonomamente chamar a ferramenta MCP: {tool_name}({tool_args})")
-                tool_result = self.mcp_registry.execute_tool(tool_name, tool_args)
-
-                # Alimenta o resultado de volta à LLM para ela gerar a resposta falada
-                messages.append({
-                    "role": "assistant",
-                    "content": f"Executei a ferramenta {tool_name}."
-                })
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        f"Resultado da ferramenta {tool_name}: '{tool_result}'. "
-                        "Agora responda diretamente ao operador de forma educada, curta e natural em português."
-                    )
-                })
-
-                synth_response = self.llm.create_chat_completion(
+                response = self.llm.create_chat_completion(
                     messages=messages,
-                    max_tokens=150,
-                    temperature=0.5
+                    tools=tools,
+                    tool_choice="auto",
+                    max_tokens=256,
+                    temperature=0.1
                 )
-                return synth_response["choices"][0]["message"]["content"].strip()
 
-            content = message.get("content", "")
-            return content.strip() if content else "Como posso ajudar, senhor?"
+                choice = response["choices"][0]
+                message = choice["message"]
+                content = (message.get("content") or "").strip()
+
+                detected_calls = self._extract_tool_calls(message)
+
+                if detected_calls:
+                    call_info = detected_calls[0]
+                    tool_name = call_info["name"]
+                    tool_args = call_info["arguments"]
+
+                    logger.info(f"[Warden Action] Chamando ferramenta MCP: {tool_name}({tool_args})")
+                    tool_result = self.mcp_registry.execute_tool(tool_name, tool_args)
+                    logger.info(f"[Warden Observation] Retorno: {tool_result}")
+
+                    # Adiciona a ação do assistente e a observação da ferramenta ao histórico ReAct
+                    messages.append({
+                        "role": "assistant",
+                        "content": f"<tool_call>\n{{\"name\": \"{tool_name}\", \"arguments\": {json.dumps(tool_args)}}}\n</tool_call>"
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"[Observation]: O resultado da ferramenta '{tool_name}' foi: '{tool_result}'. "
+                            "Se o objetivo do operador foi concluído, responda agora com a síntese final concisa e educada em português. "
+                            "Se ainda faltar alguma ação para concluir o pedido, execute a próxima ferramenta."
+                        )
+                    })
+                    continue
+
+                # WARDEN SUPERVISION:
+                # Se o modelo gerou apenas conversa em texto, mas o texto indica simulação ou intenção
+                # sem ter chamado a ferramenta (ex: "vou baixar", "estou pronto para baixar", "posso verificar")
+                conversational_evasion = any(phrase in content.lower() for phrase in [
+                    "estou pronto para", "posso verificar", "vou verificar", "vou baixar",
+                    "baixando a nova versão", "aqui está a nova versão", "desligando o bluetooth",
+                    "ativando o bluetooth", "ajustando o volume", "aqui está", "vou checar"
+                ])
+
+                if conversational_evasion and step == 1:
+                    logger.warning("[Warden Alert] A IA tentou responder conversacionalmente sem emitir tool_call. Forçando execução.")
+                    messages.append({
+                        "role": "assistant",
+                        "content": content
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "[Warden Constraint]: Você apenas descreveu a ação em texto sem chamar a ferramenta correspondente. "
+                            "Não converse sobre a ação. Você DEVE obrigatoriamente chamar a ferramenta MCP adequada agora via <tool_call>."
+                        )
+                    })
+                    continue
+
+                # Se não há mais tool calls e o modelo produziu a resposta final
+                if content:
+                    # Limpa quaisquer resíduos de tags internas antes de falar
+                    clean_speech = re.sub(r'<tool_call>.*?</tool_call>', '', content, flags=re.DOTALL).strip()
+                    clean_speech = re.sub(r'\[Observation\]:.*', '', clean_speech, flags=re.DOTALL).strip()
+                    return clean_speech if clean_speech else "Ação concluída, senhor."
+
+            return "Operação processada pelo núcleo do sistema."
 
         except (OSError, Exception) as e:
             logger.warning(f"Erro na execução da LLM ({e}). Recorrendo ao modo universal MCP...")
