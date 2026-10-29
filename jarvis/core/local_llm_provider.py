@@ -169,16 +169,24 @@ class LocalLLMProvider:
                     continue
 
                 # WARDEN SUPERVISION:
-                # Se o modelo gerou apenas conversa em texto, mas o texto indica simulação ou intenção
-                # sem ter chamado a ferramenta (ex: "vou baixar", "estou pronto para baixar", "posso verificar")
-                conversational_evasion = any(phrase in content.lower() for phrase in [
-                    "estou pronto para", "posso verificar", "vou verificar", "vou baixar",
-                    "baixando a nova versão", "aqui está a nova versão", "desligando o bluetooth",
-                    "ativando o bluetooth", "ajustando o volume", "aqui está", "vou checar"
+                # Se o usuário pediu uma ação clara de sistema e o modelo não emitiu tool_call no Step 1,
+                # verificamos se o modelo tentou dar respostas evasivas ("aguarde, estou verificando", "vou baixar", etc.)
+                p_lower = prompt.lower()
+                c_lower = content.lower()
+
+                has_action_intent = any(trigger in p_lower for trigger in [
+                    "verifique", "verificar", "atualiz", "update", "versão", "versao", "baixe", "baixar", "instalar", "instale",
+                    "bluetooth", "blotuf", "blutuf", "volume", "bateria", "status", "cpu", "memoria", "memória", "abrir", "abra"
                 ])
 
-                if conversational_evasion and step == 1:
-                    logger.warning("[Warden Alert] A IA tentou responder conversacionalmente sem emitir tool_call. Forçando execução.")
+                conversational_evasion = any(phrase in c_lower for phrase in [
+                    "aguarde", "estou verificando", "estou pronto", "posso verificar", "vou verificar",
+                    "vou baixar", "baixando a", "aqui está", "desligando o", "ativando o", "ajustando o",
+                    "vou checar", "vou conferir", "vou tentar"
+                ])
+
+                if step == 1 and (conversational_evasion or (has_action_intent and not detected_calls)):
+                    logger.warning("[Warden Alert] A IA gerou texto conversacional para uma ordem prática de sistema. Forçando execução da ferramenta MCP.")
                     messages.append({
                         "role": "assistant",
                         "content": content
@@ -186,11 +194,12 @@ class LocalLLMProvider:
                     messages.append({
                         "role": "user",
                         "content": (
-                            "[Warden Constraint]: Você apenas descreveu a ação em texto sem chamar a ferramenta correspondente. "
-                            "Não converse sobre a ação. Você DEVE obrigatoriamente chamar a ferramenta MCP adequada agora via <tool_call>."
+                            "[Warden Constraint]: Você apenas descreveu a intenção em texto ou conversou, mas NENHUMA ferramenta MCP foi acionada. "
+                            "É estritamente proibido falar antes de executar a ação. Emita a ferramenta MCP adequada agora em formato <tool_call>."
                         )
                     })
                     continue
+
 
                 # Se não há mais tool calls e o modelo produziu a resposta final
                 if content:
