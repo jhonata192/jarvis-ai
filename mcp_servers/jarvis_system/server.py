@@ -196,3 +196,21 @@ def check_for_updates() -> str:
         return f"Uma nova versão ({tag}) está disponível no GitHub. A sua versão atual é {updater.current_version}."
     except Exception as e:
         return f"Erro ao verificar atualizações: {e}"
+
+def install_latest_update() -> str:
+    """Baixa e instala a versão mais recente do Jarvis AI a partir do GitHub Releases."""
+    try:
+        from jarvis.core.updater import JarvisUpdater
+        updater = JarvisUpdater()
+        info = updater.check_for_update()
+        if not info:
+            return f"O Jarvis já está em sua versão mais recente ({updater.current_version}). Nenhuma atualização necessária."
+        tag = info.get("tag_name", "")
+        success = updater.download_and_install_update(info)
+        if success:
+            return f"A versão {tag} foi baixada com sucesso e o instalador foi iniciado para atualizar o sistema."
+        else:
+            return f"Não foi possível concluir o download da versão {tag}."
+    except Exception as e:
+        return f"Erro ao instalar atualização: {e}"
+

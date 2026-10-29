@@ -47,85 +47,13 @@ class JarvisAssistant:
             self.llm = AgyProvider()
 
     def ask(self, user_prompt: str, with_rag: bool = True) -> str:
-        """Processa a pergunta utilizando o cérebro local e RAG com resposta ultra rápida."""
+        """
+        Processa a solicitação do usuário delegando 100% da decisão para a IA (LLM).
+        A LLM avalia autonomamente as ferramentas MCP disponíveis e decide quando chamá-las.
+        """
         lower = user_prompt.lower()
 
-        # ⚡ Fast-Path de Bluetooth nativo (resposta em milissegundos)
-        if "bluetooth" in lower:
-            from mcp_servers.jarvis_system import server as mcp_system
-            if any(w in lower for w in ["desligar", "desliga", "desative", "desativar", "apagar", "desconectar"]):
-                res = mcp_system.set_bluetooth_radio_state("off")
-                return "Bluetooth desligado com sucesso." if "desligado" in res.lower() or "off" in res.lower() else res
-            elif any(w in lower for w in ["ligar", "liga", "ative", "ativar", "habilitar"]):
-                res = mcp_system.set_bluetooth_radio_state("on")
-                return "Bluetooth ativado com sucesso." if "ativado" in res.lower() or "on" in res.lower() else res
-            else:
-                return mcp_system.get_bluetooth_devices()
-
-        # ⚡ Fast-Path de Status da Máquina
-        if "status do sistema" in lower or "status do pc" in lower or "como está a máquina" in lower:
-            status = self.tools.get_system_status()
-            return (
-                f"Status do sistema: "
-                f"CPU em {status['cpu_percent']}, "
-                f"memória RAM com {status['ram_used_gb']} em uso "
-                f"e {status['disk_free_gb']} livres no disco."
-            )
-
-        # ⚡ Fast-Path de Atualização do Jarvis
-        if any(w in lower for w in [
-            "atualização", "atualizações", "atualizacao", "atualizacoes",
-            "atualizar", "atualize", "update",
-            "nova versão", "nova versao", "novas versões", "novas versoes",
-            "novas versão", "novas versao", "nota versão", "nota versao",
-            "versões", "versoes", "versão", "versao"
-        ]):
-            from jarvis.core.updater import JarvisUpdater
-            import time
-            updater = JarvisUpdater()
-            info = updater.check_for_update()
-            if not info:
-                return f"O Jarvis já está em sua versão mais recente ({updater.current_version}). Nenhuma atualização pendente."
-            
-            tag = info.get("tag_name", "")
-            if "instalar" in lower or "atualize" in lower or "sim" in lower:
-                if self.voice:
-                    try:
-                        self.voice.speak(f"Iniciando download da atualização {tag}. Aguarde um instante.")
-                    except Exception:
-                        pass
-
-                last_spoken_time = [0.0]
-                last_spoken_pct = [-1]
-
-                def on_progress(msg: str, pct: int = 0, current_mb: float = 0.0, total_mb: float = 0.0, description: str = ""):
-                    if pct <= 0:
-                        return
-                    now = time.time()
-                    if now - last_spoken_time[0] >= 5.0 and pct != last_spoken_pct[0]:
-                        last_spoken_time[0] = now
-                        last_spoken_pct[0] = pct
-                        if self.voice:
-                            try:
-                                self.voice.speak(f"Download da atualização: {pct} por cento concluído.")
-                            except Exception:
-                                pass
-
-                success = updater.download_and_install_update(info, status_callback=on_progress)
-                if success:
-                    final_msg = f"A versão {tag} foi baixada e o instalador foi iniciado para atualizar o sistema."
-                    if self.voice:
-                        try:
-                            self.voice.speak(final_msg)
-                        except Exception:
-                            pass
-                    return final_msg
-                else:
-                    return f"Encontrei a versão {tag}, mas ocorreu uma falha ao tentar baixar o instalador."
-            else:
-                return f"Uma nova versão ({tag}) está disponível no GitHub. Peça para eu atualizar para instalar automaticamente."
-
-        # RAG Context Retrieval (Ignorado em comandos de ação direta para economizar ~150ms)
+        # RAG Context Retrieval (Ignorado em comandos curtos de ação direta para economizar tempo)
         is_direct_command = any(lower.startswith(prefix) for prefix in [
             "abra", "abrir", "inicie", "executar", "feche", "fechar", "aumente", "abaixe",
             "volume", "desligue", "ligue", "silencie", "pause", "play", "toque", "coloque"
@@ -160,9 +88,8 @@ class JarvisAssistant:
             )
         else:
             from jarvis.core.local_llm_provider import LocalLLMProvider
-            dummy = LocalLLMProvider.__new__(LocalLLMProvider)
-            dummy.mcp_registry = from_agent_mcp() if 'from_agent_mcp' in locals() else None
             from jarvis.core.mcp_registry import MCPRegistry
+            dummy = LocalLLMProvider.__new__(LocalLLMProvider)
             dummy.mcp_registry = MCPRegistry()
             return dummy._fallback_generate(user_prompt)
 

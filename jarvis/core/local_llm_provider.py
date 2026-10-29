@@ -231,6 +231,8 @@ class LocalLLMProvider:
                 return self.mcp_registry.execute_tool("open_app_or_website", {"target": target})
 
         # 5. Atualização do Jarvis
+        if any(w in p_lower for w in ["atualizar", "atualize", "instalar atualização", "instale"]):
+            return self.mcp_registry.execute_tool("install_latest_update", {})
         if any(w in p_lower for w in ["atualização", "atualizacao", "versão", "versao", "update"]):
             return self.mcp_registry.execute_tool("check_for_updates", {})
 

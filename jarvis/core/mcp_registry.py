@@ -20,7 +20,8 @@ class MCPRegistry:
             "get_battery_status": mcp_system.get_battery_status,
             "get_hardware_telemetry": mcp_system.get_hardware_telemetry,
             "open_app_or_website": mcp_system.open_app_or_website,
-            "check_for_updates": mcp_system.check_for_updates
+            "check_for_updates": mcp_system.check_for_updates,
+            "install_latest_update": mcp_system.install_latest_update
         }
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
@@ -107,6 +108,14 @@ class MCPRegistry:
                 "function": {
                     "name": "check_for_updates",
                     "description": "Verifica se existe uma nova versão ou atualização do Jarvis AI disponível no GitHub.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "install_latest_update",
+                    "description": "Baixa e instala a atualização ou nova versão do Jarvis AI.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             }
