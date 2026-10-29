@@ -32,9 +32,10 @@ class JarvisConfig(BaseSettings):
     # Motor de IA: 'local' (offline ultra-leve) ou 'agy' (Antigravity CLI)
     AI_PROVIDER: str = "local"
     
-    # Provedor Local (100% Offline Hermes 3 - Llama 3.2 3B via llama-cpp-python)
+    # Provedor Local (100% Offline Qwen 2.5 1.5B via llama-cpp-python)
     # Procura primeiro se existe no repo local, se não aponta para a pasta do usuário em AppData
-    LOCAL_MODEL_PATH: str = str((BASE_DIR / "models" / "Hermes-3-Llama-3.2-3B-Q4_K_M.gguf") if (BASE_DIR / "models" / "Hermes-3-Llama-3.2-3B-Q4_K_M.gguf").exists() else (MODELS_DIR / "Hermes-3-Llama-3.2-3B-Q4_K_M.gguf"))
+    LOCAL_MODEL_PATH: str = str((BASE_DIR / "models" / "qwen2.5-1.5b-instruct-q4_k_m.gguf") if (BASE_DIR / "models" / "qwen2.5-1.5b-instruct-q4_k_m.gguf").exists() else (MODELS_DIR / "qwen2.5-1.5b-instruct-q4_k_m.gguf"))
+
 
     
     # Provedor AGY (opcional como fallback)

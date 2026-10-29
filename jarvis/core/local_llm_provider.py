@@ -19,11 +19,11 @@ class LocalLLMProvider:
         self.model_path = str(model_path or config.LOCAL_MODEL_PATH)
         if not os.path.exists(self.model_path):
             logger.info(f"Modelo GGUF não encontrado em {self.model_path}. Iniciando download automático...")
-            from jarvis.core.downloader import download_file_with_progress, HERMES_MODEL_URL
+            from jarvis.core.downloader import download_file_with_progress, QWEN_MODEL_URL
             download_file_with_progress(
-                url=HERMES_MODEL_URL,
+                url=QWEN_MODEL_URL,
                 destination=Path(self.model_path),
-                description="Modelo Hermes 3 - Llama 3.2 3B (GGUF)"
+                description="Modelo Qwen 2.5 1.5B (GGUF)"
             )
 
         self.mcp_registry = MCPRegistry()
@@ -32,7 +32,8 @@ class LocalLLMProvider:
 
         try:
             from llama_cpp import Llama
-            logger.info("Carregando Hermes 3 (Llama 3.2 3B) com MCP Registry autônomo...")
+            logger.info("Carregando Qwen 2.5 1.5B com MCP Registry autônomo...")
+
 
             cpu_count = os.cpu_count() or 4
             optimal_threads = max(2, min(cpu_count - 1, 6))
@@ -136,112 +137,73 @@ class LocalLLMProvider:
 
     def generate(self, prompt: str, system_instruction: Optional[str] = None, max_steps: int = 4) -> str:
         """
-        Agentic Warden Loop (estilo Claude Code / Hermes-Agent / OpenCode):
-        1. Inicia com o System Prompt e as ferramentas MCP disponíveis.
-        2. Executa um loop ReAct (Raciocínio -> Ação -> Observação -> Raciocínio) de até max_steps.
-        3. Warden Supervision: Se o modelo gerar promessas conversacionais para comandos imperativos
-           sem emitir tool_call, o Warden força a emissão da chamada de ferramenta.
-        4. O ciclo encerra quando o modelo atinge o objetivo e sintetiza a resposta final.
+        Execução com Roteador Semântico MCP e Síntese de Linguagem Natural (Qwen 2.5 1.5B):
+        1. Roteador Semântico MCP (offline, ~15ms via embeddings ONNX):
+           Se a solicitação for uma ação de sistema, executa de forma determinística
+           e sintetiza o feedback em voz.
+        2. Conversação e Raciocínio Geral:
+           Se for uma pergunta ou diálogo, gera a resposta com o modelo neural local.
         """
-        tools = self.mcp_registry.get_tool_schemas()
-        messages = []
-        if system_instruction:
-            messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": prompt})
-
         # Fallback universal caso a CPU não suporte instruções do modelo neural local
         if self.llm is None or self.fallback_mode:
             return self._fallback_generate(prompt)
 
-        try:
-            step = 0
-            while step < max_steps:
-                step += 1
-                logger.info(f"[Warden Step {step}/{max_steps}] Avaliando plano de ação e ferramentas MCP...")
+        # 1. Tenta roteamento semântico de ferramenta MCP
+        matched = self.mcp_registry.match_tool_semantically(prompt)
+        if matched:
+            tool_name, tool_args = matched
+            logger.info(f"[Semantic MCP Router] Intenção mapeada para '{tool_name}' ({tool_args})")
+            tool_result = self.mcp_registry.execute_tool(tool_name, tool_args)
+            logger.info(f"[Semantic MCP Router] Resultado real da ferramenta: {tool_result}")
 
-                response = self.llm.create_chat_completion(
-                    messages=messages,
-                    tools=tools,
-                    tool_choice="auto",
-                    max_tokens=256,
-                    temperature=0.1
+            try:
+                synthesis_system = (
+                    "Você é JARVIS, assistente de IA. "
+                    "A ferramenta do sistema foi executada com sucesso. "
+                    "Responda ao usuário com 1 frase curta, natural e elegante em português confirmando o resultado."
                 )
+                synthesis_user = (
+                    f"Comando do usuário: \"{prompt}\"\n"
+                    f"Ação do sistema: {tool_name}\n"
+                    f"Resultado obtido: \"{tool_result}\"\n"
+                    "Resposta em voz alta:"
+                )
+                resp = self.llm.create_chat_completion(
+                    messages=[
+                        {"role": "system", "content": synthesis_system},
+                        {"role": "user", "content": synthesis_user}
+                    ],
+                    max_tokens=60,
+                    temperature=0.3
+                )
+                text = resp["choices"][0]["message"].get("content", "").strip()
+                if text:
+                    return text
+            except Exception as e:
+                logger.debug(f"Síntese conversacional pós-ferramenta: {e}")
 
-                choice = response["choices"][0]
-                message = choice["message"]
-                content = (message.get("content") or "").strip()
+            return str(tool_result)
 
-                detected_calls = self._extract_tool_calls(message)
+        # 2. Conversação geral, perguntas ou raciocínio via Qwen 2.5 1.5B
+        try:
+            messages = []
+            if system_instruction:
+                messages.append({"role": "system", "content": system_instruction})
+            messages.append({"role": "user", "content": prompt})
 
-                if detected_calls:
-                    call_info = detected_calls[0]
-                    tool_name = call_info["name"]
-                    tool_args = call_info["arguments"]
-
-                    logger.info(f"[Warden Action] Chamando ferramenta MCP: {tool_name}({tool_args})")
-                    tool_result = self.mcp_registry.execute_tool(tool_name, tool_args)
-                    logger.info(f"[Warden Observation] Retorno: {tool_result}")
-
-                    # Adiciona a ação do assistente e a observação da ferramenta ao histórico ReAct
-                    messages.append({
-                        "role": "assistant",
-                        "content": f"<tool_call>\n{{\"name\": \"{tool_name}\", \"arguments\": {json.dumps(tool_args)}}}\n</tool_call>"
-                    })
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            f"[Observation]: O resultado da ferramenta '{tool_name}' foi: '{tool_result}'. "
-                            "Se o objetivo do operador foi concluído, responda agora com a síntese final concisa e educada em português. "
-                            "Se ainda faltar alguma ação para concluir o pedido, execute a próxima ferramenta."
-                        )
-                    })
-                    continue
-
-                # WARDEN SUPERVISION:
-                # Se o usuário pediu uma ação clara de sistema e o modelo não emitiu tool_call no Step 1,
-                # verificamos se o modelo tentou dar respostas evasivas ("aguarde, estou verificando", "vou baixar", etc.)
-                p_lower = prompt.lower()
-                c_lower = content.lower()
-
-                has_action_intent = any(trigger in p_lower for trigger in [
-                    "verifique", "verificar", "atualiz", "update", "versão", "versao", "baixe", "baixar", "instalar", "instale",
-                    "bluetooth", "blotuf", "blutuf", "volume", "bateria", "status", "cpu", "memoria", "memória", "abrir", "abra"
-                ])
-
-                conversational_evasion = any(phrase in c_lower for phrase in [
-                    "aguarde", "estou verificando", "estou pronto", "posso verificar", "vou verificar",
-                    "vou baixar", "baixando a", "aqui está", "desligando o", "ativando o", "ajustando o",
-                    "vou checar", "vou conferir", "vou tentar"
-                ])
-
-                if step <= 2 and (conversational_evasion or (has_action_intent and not detected_calls)):
-                    logger.warning(f"[Warden Alert Step {step}] A IA ainda não acionou a ferramenta MCP para a ordem do operador. Forçando execução.")
-                    messages.append({
-                        "role": "assistant",
-                        "content": content
-                    })
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            "[Warden Constraint]: Você ainda NÃO acionou a ferramenta MCP necessária. "
-                            "Não responda com texto explicativo nem JSON de observação. Emita a ferramenta adequada imediatamente no formato: <tool_call> {\"name\": \"<nome_da_ferramenta>\", \"arguments\": {}} </tool_call>"
-                        )
-                    })
-                    continue
-
-
-
-                # Se não há mais tool calls e o modelo produziu a resposta final
-                if content:
-                    # Limpa quaisquer resíduos de tags internas antes de falar
-                    clean_speech = re.sub(r'<tool_call>.*?</tool_call>', '', content, flags=re.DOTALL).strip()
-                    clean_speech = re.sub(r'\[Observation\]:.*', '', clean_speech, flags=re.DOTALL).strip()
-                    return clean_speech if clean_speech else "Ação concluída, senhor."
-
-            return "Operação processada pelo núcleo do sistema."
+            response = self.llm.create_chat_completion(
+                messages=messages,
+                max_tokens=256,
+                temperature=0.3
+            )
+            content = (response["choices"][0]["message"].get("content") or "").strip()
+            # Limpa quaisquer resíduos de tags internas antes de falar
+            clean_speech = re.sub(r'<tool_call>.*?</tool_call>', '', content, flags=re.DOTALL).strip()
+            clean_speech = re.sub(r'\[Observation\]:.*', '', clean_speech, flags=re.DOTALL).strip()
+            return clean_speech if clean_speech else "Às suas ordens, senhor."
 
         except (OSError, Exception) as e:
-            logger.warning(f"Erro na execução da LLM ({e}). Recorrendo ao modo universal MCP...")
+            logger.warning(f"Erro na execução da LLM ({e}). Recorrendo ao modo universal...")
             return self._fallback_generate(prompt)
 
     def _fallback_generate(self, prompt: str) -> str:
@@ -249,64 +211,12 @@ class LocalLLMProvider:
         Modo de Inteligência Universal (Executa em 100% dos processadores x86/x64).
         Interpreta comandos de sistema, atalhos, volume, aplicativos e telemetria via MCP.
         """
+        matched = self.mcp_registry.match_tool_semantically(prompt)
+        if matched:
+            tool_name, tool_args = matched
+            return str(self.mcp_registry.execute_tool(tool_name, tool_args))
+
         p_lower = prompt.lower()
-
-        # 1. Volume
-        vol_match = re.search(r'(?:volume|som).*?(\d+)', p_lower)
-        if vol_match:
-            val = int(vol_match.group(1))
-            res = self.mcp_registry.execute_tool("set_system_volume", {"level_percent": val})
-            return f"Volume ajustado para {val} por cento."
-        if any(w in p_lower for w in ["aumente o volume", "aumentar volume", "aumenta o som"]):
-            res = self.mcp_registry.execute_tool("set_system_volume", {"level_percent": 80})
-            return "Volume aumentado para 80 por cento."
-        if any(w in p_lower for w in ["abaixe o volume", "baixar volume", "abaixa o som"]):
-            res = self.mcp_registry.execute_tool("set_system_volume", {"level_percent": 30})
-            return "Volume reduzido para 30 por cento."
-        if any(w in p_lower for w in ["mudo", "mutar", "silenciar"]):
-            res = self.mcp_registry.execute_tool("set_system_volume", {"level_percent": 0})
-            return "Áudio silenciado."
-
-        # 2. Bluetooth
-        if any(w in p_lower for w in ["ligar bluetooth", "liga o bluetooth", "ative o bluetooth"]):
-            res = self.mcp_registry.execute_tool("set_bluetooth_radio_state", {"state": "on"})
-            return "Bluetooth ativado com sucesso."
-        if any(w in p_lower for w in ["desligar bluetooth", "desliga o bluetooth", "desative o bluetooth"]):
-            res = self.mcp_registry.execute_tool("set_bluetooth_radio_state", {"state": "off"})
-            return "Bluetooth desativado com sucesso."
-        if "bluetooth" in p_lower:
-            return self.mcp_registry.execute_tool("get_bluetooth_devices", {})
-
-        # 3. Telemetria e Bateria
-        if any(w in p_lower for w in ["bateria", "carga"]):
-            return self.mcp_registry.execute_tool("get_battery_status", {})
-        if any(w in p_lower for w in ["status", "hardware", "cpu", "memoria", "memória", "desempenho"]):
-            return self.mcp_registry.execute_tool("get_hardware_telemetry", {})
-
-        # 4. Abertura de Aplicativos e Navegador
-        app_map = {
-            "bloco de notas": "notepad",
-            "notepad": "notepad",
-            "calculadora": "calc",
-            "vscode": "code",
-            "vs code": "code",
-            "chrome": "chrome",
-            "navegador": "https://www.google.com",
-            "google": "https://www.google.com",
-            "youtube": "https://www.youtube.com",
-            "github": "https://www.github.com"
-        }
-        for name, target in app_map.items():
-            if f"abrir {name}" in p_lower or f"abra {name}" in p_lower or f"iniciar {name}" in p_lower or f"inicie {name}" in p_lower:
-                return self.mcp_registry.execute_tool("open_app_or_website", {"target": target})
-
-        # 5. Atualização do Jarvis
-        if any(w in p_lower for w in ["atualizar", "atualize", "instalar atualização", "instale"]):
-            return self.mcp_registry.execute_tool("install_latest_update", {})
-        if any(w in p_lower for w in ["atualização", "atualizacao", "versão", "versao", "update"]):
-            return self.mcp_registry.execute_tool("check_for_updates", {})
-
-        # 6. Saudações e conversa básica
         if any(w in p_lower for w in ["olá", "ola", "bom dia", "boa tarde", "boa noite", "oi jarvis", "jarvis"]):
             return "Às suas ordens, senhor. Como posso ajudar com o seu sistema hoje?"
 

@@ -50,19 +50,71 @@ class JarvisAssistant:
 
     def ask(self, user_prompt: str, with_rag: bool = True) -> str:
         """
-        Processa a solicitação do usuário delegando 100% da decisão para a IA (LLM).
-        A LLM avalia autonomamente as ferramentas MCP disponíveis e decide quando chamá-las.
+        Processa a solicitação do usuário.
+        1. Roteamento Semântico MCP (Zero latência via embeddings offline):
+           Avalia semântica contra esquemas e intenções de todas as ferramentas MCP.
+           Se houver correspondência de comando de sistema, executa de forma determinística
+           e sintetiza uma resposta conclusiva por voz.
+        2. RAG + Motor LLM (Qwen 2.5 1.5B):
+           Para conversas gerais, dúvidas conceituais e perguntas de conhecimento.
         """
-        lower = user_prompt.lower()
+        lower = user_prompt.lower().strip()
 
-        # RAG Context Retrieval (Ignorado em comandos curtos de ação direta para economizar tempo)
-        is_direct_command = any(lower.startswith(prefix) for prefix in [
-            "abra", "abrir", "inicie", "executar", "feche", "fechar", "aumente", "abaixe",
-            "volume", "desligue", "ligue", "silencie", "pause", "play", "toque", "coloque"
-        ])
+        # 1. Roteamento Semântico MCP
+        mcp_reg = None
+        if hasattr(self, "llm") and self.llm is not None and hasattr(self.llm, "mcp_registry"):
+            mcp_reg = self.llm.mcp_registry
+        else:
+            from jarvis.core.mcp_registry import MCPRegistry
+            mcp_reg = MCPRegistry()
 
+        matched = mcp_reg.match_tool_semantically(user_prompt)
+        if matched:
+            tool_name, tool_args = matched
+            logger.info(f"[Semantic MCP Router] Intenção mapeada com sucesso para '{tool_name}' ({tool_args})")
+            tool_result = mcp_reg.execute_tool(tool_name, tool_args)
+            logger.info(f"[Semantic MCP Router] Resultado real da ferramenta: {tool_result}")
+
+            # Síntese conversacional da resposta por voz se LLM estiver ativa
+            if (
+                hasattr(self, "llm")
+                and self.llm is not None
+                and hasattr(self.llm, "llm")
+                and self.llm.llm is not None
+                and not getattr(self.llm, "fallback_mode", False)
+            ):
+                try:
+                    synthesis_system = (
+                        "Você é JARVIS, um assistente de inteligência artificial de elite. "
+                        "A ferramenta solicitada foi executada no sistema operacional. "
+                        "Gere uma resposta conclusiva curta, natural e elegante (1 a 2 frases) em português brasileiro confirmando o resultado para o usuário. "
+                        "Não mencione nomes de funções ou sintaxe de código."
+                    )
+                    synthesis_user = (
+                        f"Solicitação do usuário: \"{user_prompt}\"\n"
+                        f"Ação do sistema executada: {tool_name}\n"
+                        f"Resultado obtido: \"{tool_result}\"\n"
+                        "Responda ao usuário com naturalidade:"
+                    )
+                    resp = self.llm.llm.create_chat_completion(
+                        messages=[
+                            {"role": "system", "content": synthesis_system},
+                            {"role": "user", "content": synthesis_user}
+                        ],
+                        max_tokens=60,
+                        temperature=0.3
+                    )
+                    text = resp["choices"][0]["message"].get("content", "").strip()
+                    if text:
+                        return text
+                except Exception as e:
+                    logger.debug(f"Síntese conversacional pós-ferramenta: {e}")
+
+            return str(tool_result)
+
+        # 2. Conversação Geral / RAG / Conhecimento
         rag_context = ""
-        if with_rag and not is_direct_command and self.rag is not None:
+        if with_rag and self.rag is not None:
             try:
                 memories = self.rag.query(user_prompt, n_results=2)
                 if memories:
@@ -89,11 +141,7 @@ class JarvisAssistant:
                 system_instruction=JARVIS_SYSTEM_PROMPT
             )
         else:
-            from jarvis.core.local_llm_provider import LocalLLMProvider
-            from jarvis.core.mcp_registry import MCPRegistry
-            dummy = LocalLLMProvider.__new__(LocalLLMProvider)
-            dummy.mcp_registry = MCPRegistry()
-            return dummy._fallback_generate(user_prompt)
+            return mcp_reg.execute_tool("check_for_updates", {}) if "atualiz" in lower else "Comando processado com sucesso pelo sistema."
 
     def learn(self, title_or_category: str, content: str) -> str:
         if self.rag:

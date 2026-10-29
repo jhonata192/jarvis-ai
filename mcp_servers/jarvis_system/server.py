@@ -124,15 +124,20 @@ def set_bluetooth_radio_state(state: str) -> str:
 def set_system_volume(level_percent: int) -> str:
     """Ajusta o volume do áudio do computador Windows de 0 a 100%."""
     try:
-        from ctypes import cast, POINTER
-        from comtypes import CLSCTX_ALL
-        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-
+        from pycaw.pycaw import AudioUtilities
         devices = AudioUtilities.GetSpeakers()
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
-
         clamped = max(0, min(100, int(level_percent)))
+
+        # Compatibilidade com versões novas e legadas de pycaw
+        if hasattr(devices, "EndpointVolume"):
+            volume = devices.EndpointVolume
+        else:
+            from ctypes import cast, POINTER
+            from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import IAudioEndpointVolume
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
+
         volume.SetMasterVolumeLevelScalar(clamped / 100.0, None)
         return f"Volume do sistema ajustado para {clamped}%."
     except Exception as e:
