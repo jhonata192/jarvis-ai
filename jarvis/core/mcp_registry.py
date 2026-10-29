@@ -1,6 +1,9 @@
 import os
 import json
 import logging
+import asyncio
+import concurrent.futures
+from pathlib import Path
 from typing import List, Dict, Any, Callable, Optional, Tuple
 from mcp_servers.jarvis_system import server as mcp_system
 
@@ -8,12 +11,15 @@ logger = logging.getLogger("Jarvis.MCPRegistry")
 
 class MCPRegistry:
     """
-    Carrega e orquestra ferramentas de servidores MCP para o modelo local.
-    Expõe as ferramentas em formato padrão de OpenAI Function Calling / Tool Calling.
+    Host / Hub MCP do Jarvis (Padrão Claude Desktop / Cursor / Crush).
+    1. Orquestra ferramentas internas nativas (Python, latência zero).
+    2. Descobre e executa servidores MCP externos (Node.js via npx, Python via uvx/python) configurados em mcp_servers.json.
+    3. Roteia dinamicamente chamadas via embeddings vetoriais locais (all-MiniLM-L6-v2 ONNX) sem limites de ferramentas.
     """
 
-    def __init__(self):
-        self.tools_map: Dict[str, Callable] = {
+    def __init__(self, config_path: Optional[str] = None):
+        self.config_path = self._resolve_config_path(config_path)
+        self.internal_tools: Dict[str, Callable] = {
             "get_bluetooth_devices": mcp_system.get_bluetooth_devices,
             "set_bluetooth_radio_state": mcp_system.set_bluetooth_radio_state,
             "set_system_volume": mcp_system.set_system_volume,
@@ -23,10 +29,99 @@ class MCPRegistry:
             "check_for_updates": mcp_system.check_for_updates,
             "install_latest_update": mcp_system.install_latest_update
         }
+        self.tools_map = self.internal_tools
+        self.external_servers: Dict[str, Dict[str, Any]] = {}
+        self.external_tools: Dict[str, Dict[str, Any]] = {}
+        self._load_mcp_config()
+
+    def _resolve_config_path(self, override_path: Optional[str] = None) -> Path:
+        if override_path:
+            return Path(override_path)
+
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            app_dir = Path(local_app_data) / "Jarvis AI"
+            app_dir.mkdir(parents=True, exist_ok=True)
+            app_cfg = app_dir / "mcp_servers.json"
+            if app_cfg.exists():
+                return app_cfg
+            default_target = app_cfg
+        else:
+            default_target = Path("mcp_servers.json")
+
+        local_cfg = Path("mcp_servers.json")
+        if local_cfg.exists():
+            return local_cfg.resolve()
+
+        try:
+            default_content = {
+                "mcpServers": {
+                    "system": {
+                        "command": "internal",
+                        "description": "Ferramentas nativas de hardware, volume, bluetooth, bateria e atualizações do Jarvis"
+                    }
+                }
+            }
+            with open(default_target, "w", encoding="utf-8") as f:
+                json.dump(default_content, f, indent=2, ensure_ascii=False)
+            return default_target
+        except Exception as e:
+            logger.warning(f"Não foi possível criar mcp_servers.json padrão: {e}")
+            return Path("mcp_servers.json")
+
+    def _load_mcp_config(self):
+        """Lê o arquivo mcp_servers.json e registra servidores externos."""
+        if not self.config_path.exists():
+            return
+
+        try:
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            servers = data.get("mcpServers", {})
+            for name, cfg in servers.items():
+                cmd = cfg.get("command")
+                if cmd == "internal" or name == "system":
+                    continue
+                self.external_servers[name] = cfg
+                logger.info(f"[MCP Hub] Servidor MCP externo registrado: '{name}' ({cmd})")
+                self._discover_server_tools(name, cfg)
+        except Exception as e:
+            logger.warning(f"Erro ao carregar mcp_servers.json ({self.config_path}): {e}")
+
+    def _discover_server_tools(self, server_name: str, cfg: Dict[str, Any]):
+        """Executa handshake MCP via stdio e lista as ferramentas fornecidas pelo servidor externo."""
+        cmd = cfg.get("command")
+        args = cfg.get("args", [])
+        env = cfg.get("env")
+
+        async def _async_discover():
+            from mcp import ClientSession, StdioServerParameters
+            from mcp.client.stdio import stdio_client
+            params = StdioServerParameters(command=cmd, args=args, env=env)
+            async with stdio_client(params) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    res = await session.list_tools()
+                    return res.tools
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                tools = executor.submit(asyncio.run, _async_discover()).result(timeout=10)
+                for t in tools:
+                    self.external_tools[t.name] = {
+                        "server_name": server_name,
+                        "tool": t,
+                        "cfg": cfg,
+                        "description": t.description or "",
+                        "inputSchema": getattr(t, "input_schema", getattr(t, "inputSchema", {}))
+                    }
+                    logger.info(f"[MCP Hub] Ferramenta externa descoberta: '{t.name}' (de {server_name})")
+        except Exception as e:
+            logger.warning(f"[MCP Hub] Falha ao descobrir ferramentas do servidor '{server_name}': {e}")
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
         """Retorna os esquemas de ferramentas compatíveis com Tool Calling do Qwen / LLaMA."""
-        return [
+        schemas = [
             {
                 "type": "function",
                 "function": {
@@ -180,6 +275,19 @@ class MCPRegistry:
             }
         ]
 
+        # Acrescenta esquemas das ferramentas externas descobertas via stdio MCP
+        for name, meta in self.external_tools.items():
+            schemas.append({
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": meta["description"],
+                    "parameters": meta["inputSchema"] if meta["inputSchema"] else {"type": "object", "properties": {}, "required": []}
+                }
+            })
+
+        return schemas
+
     def match_tool_semantically(self, user_query: str, threshold: float = 0.52) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
         Roteador Semântico MCP (Padrão Claude Code / Embeddings):
@@ -309,17 +417,50 @@ class MCPRegistry:
         return args
 
     def execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
-        """Executa a ferramenta MCP e retorna o resultado em string."""
-        if tool_name not in self.tools_map:
-            return f"Ferramenta '{tool_name}' não encontrada."
+        """Executa a ferramenta MCP (interna ou externa via stdio) e retorna o resultado em string."""
+        # 1. Ferramentas Internas do Sistema Windows (Zero latência)
+        if tool_name in self.internal_tools:
+            func = self.internal_tools[tool_name]
+            try:
+                logger.info(f"Executando ferramenta MCP nativa: {tool_name} com args {arguments}")
+                if arguments:
+                    return str(func(**arguments))
+                return str(func())
+            except Exception as e:
+                logger.exception(f"Erro ao executar ferramenta interna {tool_name}: {e}")
+                return f"Erro na execução da ferramenta: {e}"
 
-        func = self.tools_map[tool_name]
+        # 2. Ferramentas Externas via MCP Client stdio
+        if tool_name in self.external_tools:
+            meta = self.external_tools[tool_name]
+            cfg = meta["cfg"]
+            server_name = meta["server_name"]
+            logger.info(f"Executando ferramenta MCP externa '{tool_name}' no servidor '{server_name}'...")
+            return self._call_external_tool(cfg, tool_name, arguments)
+
+        return f"Ferramenta '{tool_name}' não encontrada no catálogo MCP."
+
+    def _call_external_tool(self, cfg: Dict[str, Any], tool_name: str, arguments: Dict[str, Any]) -> str:
+        """Invoca uma ferramenta em servidor MCP externo via stdio JSON-RPC."""
+        cmd = cfg.get("command")
+        args = cfg.get("args", [])
+        env = cfg.get("env")
+
+        async def _async_call():
+            from mcp import ClientSession, StdioServerParameters
+            from mcp.client.stdio import stdio_client
+            params = StdioServerParameters(command=cmd, args=args, env=env)
+            async with stdio_client(params) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    res = await session.call_tool(tool_name, arguments)
+                    texts = [c.text for c in res.content if hasattr(c, "text")]
+                    return "\n".join(texts) if texts else "Operação concluída com sucesso pelo servidor MCP."
+
         try:
-            logger.info(f"Executando ferramenta MCP: {tool_name} com args {arguments}")
-            if arguments:
-                return str(func(**arguments))
-            return str(func())
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                return executor.submit(asyncio.run, _async_call()).result(timeout=20)
         except Exception as e:
-            logger.exception(f"Erro ao executar ferramenta {tool_name}: {e}")
-            return f"Erro na execução da ferramenta: {e}"
+            logger.exception(f"Erro ao chamar ferramenta MCP externa {tool_name}: {e}")
+            return f"Erro na execução da ferramenta externa: {e}"
 

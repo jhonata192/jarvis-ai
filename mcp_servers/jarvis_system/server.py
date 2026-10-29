@@ -4,7 +4,11 @@ import subprocess
 import webbrowser
 import psutil
 from typing import Dict, Any, List
+from mcp.server.mcpserver import MCPServer
 
+mcp_server = MCPServer("jarvis-system")
+
+@mcp_server.tool(name="get_bluetooth_devices", description="Retorna os dispositivos Bluetooth conectados, pareados e o nível de bateria de cada um.")
 def get_bluetooth_devices() -> str:
     """
     Retorna com exatidão quais dispositivos Bluetooth estão conectados ou pareados no Windows.
@@ -79,6 +83,7 @@ def get_bluetooth_devices() -> str:
     except Exception as e:
         return f"Erro ao verificar Bluetooth: {e}"
 
+@mcp_server.tool(name="set_bluetooth_radio_state", description="Liga ou desliga o rádio ou antena Bluetooth do computador.")
 def set_bluetooth_radio_state(state: str) -> str:
     """
     Liga ('on') ou Desliga ('off') o rádio Bluetooth do computador Windows.
@@ -121,6 +126,7 @@ def set_bluetooth_radio_state(state: str) -> str:
     except Exception as e:
         return f"Erro ao alterar rádio Bluetooth: {e}"
 
+@mcp_server.tool(name="set_system_volume", description="Ajusta o volume do áudio do computador Windows de 0 a 100 porcento.")
 def set_system_volume(level_percent: int) -> str:
     """Ajusta o volume do áudio do computador Windows de 0 a 100%."""
     try:
@@ -143,6 +149,7 @@ def set_system_volume(level_percent: int) -> str:
     except Exception as e:
         return f"Não foi possível alterar o volume: {e}"
 
+@mcp_server.tool(name="get_battery_status", description="Retorna a porcentagem atual da bateria do computador e se está na tomada.")
 def get_battery_status() -> str:
     """Retorna a porcentagem atual da bateria do computador e se está na tomada."""
     try:
@@ -154,6 +161,7 @@ def get_battery_status() -> str:
     except Exception as e:
         return f"Erro ao ler status da bateria: {e}"
 
+@mcp_server.tool(name="get_hardware_telemetry", description="Retorna uso da CPU, memória RAM em GB e espaço livre em disco.")
 def get_hardware_telemetry() -> str:
     """Retorna o uso atual de CPU, memória RAM em GB e espaço livre em disco."""
     try:
@@ -168,6 +176,7 @@ def get_hardware_telemetry() -> str:
     except Exception as e:
         return f"Erro na telemetria: {e}"
 
+@mcp_server.tool(name="open_app_or_website", description="Abre um aplicativo comum ou site pelo navegador.")
 def open_app_or_website(target: str) -> str:
     """Abre um aplicativo comum ou site pelo navegador."""
     apps = {
@@ -189,6 +198,7 @@ def open_app_or_website(target: str) -> str:
     except Exception as e:
         return f"Erro ao abrir {target}: {e}"
 
+@mcp_server.tool(name="check_for_updates", description="Verifica se existe uma versão mais recente do Jarvis AI no GitHub.")
 def check_for_updates() -> str:
     """Verifica no GitHub se existe uma versão mais recente do Jarvis AI e retorna o status."""
     try:
@@ -202,6 +212,7 @@ def check_for_updates() -> str:
     except Exception as e:
         return f"Erro ao verificar atualizações: {e}"
 
+@mcp_server.tool(name="install_latest_update", description="Baixa e instala a versão mais recente do Jarvis AI a partir do GitHub Releases.")
 def install_latest_update() -> str:
     """Baixa e instala a versão mais recente do Jarvis AI a partir do GitHub Releases."""
     try:
@@ -218,4 +229,8 @@ def install_latest_update() -> str:
             return f"Não foi possível concluir o download da versão {tag}."
     except Exception as e:
         return f"Erro ao instalar atualização: {e}"
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(mcp_server.run_stdio_async())
 

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "system": {
+      "command": "internal",
+      "description": "Ferramentas nativas do Windows para Jarvis (Volume, Bluetooth, Bateria, Hardware, Apps, Atualizações)"
+    }
+  }
+}
