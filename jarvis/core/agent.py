@@ -52,7 +52,15 @@ class JarvisAssistant:
 
         # ⚡ Fast-Path de Bluetooth nativo (resposta em milissegundos)
         if "bluetooth" in lower:
-            return self.tools.get_bluetooth_devices()
+            from mcp_servers.jarvis_system import server as mcp_system
+            if any(w in lower for w in ["desligar", "desliga", "desative", "desativar", "apagar", "desconectar"]):
+                res = mcp_system.set_bluetooth_radio_state("off")
+                return "Bluetooth desligado com sucesso." if "desligado" in res.lower() or "off" in res.lower() else res
+            elif any(w in lower for w in ["ligar", "liga", "ative", "ativar", "habilitar"]):
+                res = mcp_system.set_bluetooth_radio_state("on")
+                return "Bluetooth ativado com sucesso." if "ativado" in res.lower() or "on" in res.lower() else res
+            else:
+                return mcp_system.get_bluetooth_devices()
 
         # ⚡ Fast-Path de Status da Máquina
         if "status do sistema" in lower or "status do pc" in lower or "como está a máquina" in lower:

@@ -94,13 +94,34 @@ class JarvisRAG:
             "created_at": str(os.path.getmtime(config.CHROMA_PERSIST_DIR) if os.path.exists(config.CHROMA_PERSIST_DIR) else "now")
         })
 
-        self.collection.upsert(
-            documents=[text],
-            metadatas=[meta],
-            ids=[doc_id]
-        )
-        logger.info(f"Conhecimento indexado com sucesso [{category}] ID: {doc_id}")
-        return doc_id
+        try:
+            self.collection.upsert(
+                documents=[text],
+                metadatas=[meta],
+                ids=[doc_id]
+            )
+            logger.info(f"Conhecimento indexado com sucesso [{category}] ID: {doc_id}")
+            return doc_id
+        except Exception as e:
+            if "dimension" in str(e).lower():
+                logger.warning(f"Dimensão de embedding incompatível durante indexação ({e}). Recriando coleção para 384 dimensões...")
+                try:
+                    self.chroma_client.delete_collection("jarvis_memory")
+                except Exception:
+                    pass
+                self.collection = self.chroma_client.get_or_create_collection(
+                    name="jarvis_memory",
+                    embedding_function=self.embedding_fn,
+                    metadata={"description": "Memória de aprendizados, histórico e funções do Jarvis"}
+                )
+                self.collection.upsert(
+                    documents=[text],
+                    metadatas=[meta],
+                    ids=[doc_id]
+                )
+                logger.info(f"Conhecimento indexado com sucesso após migração [{category}] ID: {doc_id}")
+                return doc_id
+            raise e
 
     def query(self, query_text: str, n_results: int = 3, category: Optional[str] = None) -> List[Dict[str, Any]]:
         """

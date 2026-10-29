@@ -107,7 +107,7 @@ class VoiceEngine:
         if self.tts_engine == "piper":
             if self._speak_piper(clean_text):
                 return
-            logger.warning("Falha ou voz Piper indisponível. Tentando Edge-TTS/SAPI...")
+            logger.debug("Voz Piper em inicialização ou indisponível. Tentando Edge-TTS/SAPI...")
 
         # 2. Tenta Edge-TTS (online de altíssima qualidade se conectado à internet)
         if self.tts_engine == "edge-tts" or self.tts_engine == "piper":
