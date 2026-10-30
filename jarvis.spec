@@ -26,6 +26,8 @@ binaries += collect_dynamic_libs("onnxruntime")
 # Coleta todos os submódulos do ChromaDB com tratamento de erro
 chromadb_submodules = [m for m in collect_submodules("chromadb") if "fastapi" not in m]
 
+mcp_submodules = collect_submodules("mcp") + collect_submodules("mcp_types")
+
 hidden_imports = [
     "llama_cpp",
     "faster_whisper",
@@ -47,8 +49,13 @@ hidden_imports = [
     "speech_recognition",
     "pycaw",
     "comtypes",
-    "psutil"
-] + chromadb_submodules
+    "psutil",
+    "mcp",
+    "mcp_types",
+    "mcp_servers",
+    "mcp_servers.jarvis_system",
+    "mcp_servers.jarvis_system.server"
+] + mcp_submodules + chromadb_submodules
 
 # Verifica se existe arquivo de versão gerado pelo build.bat
 version_file = str(BASE_DIR / "version_info.txt") if os.path.exists(BASE_DIR / "version_info.txt") else None

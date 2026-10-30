@@ -1,10 +1,30 @@
 import os
 import json
+import logging
 import subprocess
 import webbrowser
 import psutil
 from typing import Dict, Any, List
-from mcp.server.mcpserver import MCPServer
+
+logger = logging.getLogger("Jarvis.MCPServer")
+
+try:
+    from mcp.server.mcpserver import MCPServer
+except ImportError:
+    logger.warning("SDK 'mcp' indisponivel: servidor MCP externo desativado, ferramentas internas seguem ativas.")
+
+    class MCPServer:
+        def __init__(self, name: str):
+            self.name = name
+
+        def tool(self, name: str, description: str):
+            def decorator(func):
+                func.__mcp_tool__ = {"name": name, "description": description}
+                return func
+            return decorator
+
+        async def run_stdio_async(self):
+            raise RuntimeError("Modulo 'mcp' ausente: impossivel iniciar o servidor MCP via stdio.")
 
 mcp_server = MCPServer("jarvis-system")
 
