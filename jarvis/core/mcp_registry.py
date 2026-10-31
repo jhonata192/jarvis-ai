@@ -1,10 +1,12 @@
 import os
 import json
+import hashlib
 import logging
 import asyncio
 import concurrent.futures
 from pathlib import Path
 from typing import List, Dict, Any, Callable, Optional, Tuple
+from jarvis.config import CACHE_DIR
 from mcp_servers.jarvis_system import server as mcp_system
 
 logger = logging.getLogger("Jarvis.MCPRegistry")
@@ -297,6 +299,101 @@ class MCPRegistry:
 
         return schemas
 
+    def _ensure_embeddings(self):
+        """
+        Carrega ou calcula os vetores semânticos das ferramentas com persistência em disco.
+        Se existir em CACHE_DIR / 'tools_embeddings_cache.json' e o hash for idêntico,
+        carrega instantaneamente (0ms) sem chamar o modelo ONNX.
+        """
+        if hasattr(self, "_tools_embeddings") and self._tools_embeddings:
+            return
+
+        import numpy as np
+
+        schemas = self.get_tool_schemas()
+        chat_anchors = [
+            "olá assistente bom dia",
+            "tudo bem como vai você",
+            "quem é você e o que faz",
+            "me conte uma história ou curiosidade",
+            "responda esta minha pergunta por favor",
+            "qual a sua opinião sobre isso",
+            "como está o seu dia hoje"
+        ]
+
+        # Gera chave de hash única baseada nos esquemas e âncoras
+        serialized = json.dumps({"schemas": schemas, "anchors": chat_anchors}, sort_keys=True, ensure_ascii=False)
+        content_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+        cache_file = CACHE_DIR / "tools_embeddings_cache.json"
+
+        # 1. Tenta carregar do cache em disco
+        if cache_file.exists():
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cache_data = json.load(f)
+                if cache_data.get("hash") == content_hash:
+                    self._tools_embeddings = {}
+                    for fn_name, item in cache_data.get("tools", {}).items():
+                        fn_meta = item["fn"]
+                        vecs = [np.array(v, dtype=np.float32) for v in item["vecs"]]
+                        self._tools_embeddings[fn_name] = (fn_meta, vecs)
+                    self._chat_anchors_vecs = [np.array(v, dtype=np.float32) for v in cache_data.get("chat_anchors", [])]
+                    logger.debug("[Semantic MCP Router] Vetores carregados do cache em disco (0ms).")
+                    return
+            except Exception as e:
+                logger.debug(f"[Semantic MCP Router] Falha ao ler cache em disco: {e}")
+
+        # 2. Se não houver cache ou se os esquemas mudaram, calcula via ONNX
+        from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+        if not hasattr(self, "_embed_fn") or self._embed_fn is None:
+            self._embed_fn = ONNXMiniLM_L6_V2()
+
+        logger.info("[Semantic MCP Router] Calculando vetores semânticos das ferramentas...")
+        self._tools_embeddings = {}
+        serializable_tools = {}
+
+        for s in schemas:
+            fn = s["function"]
+            texts_to_embed = [f"{fn['name']}: {fn['description']}"]
+            if "intents" in fn and isinstance(fn["intents"], list):
+                texts_to_embed.extend(fn["intents"])
+
+            raw_vecs = self._embed_fn(texts_to_embed)
+            vecs = [np.array(v, dtype=np.float32) for v in raw_vecs]
+            self._tools_embeddings[fn["name"]] = (fn, vecs)
+            serializable_tools[fn["name"]] = {
+                "fn": fn,
+                "vecs": [v.tolist() for v in vecs]
+            }
+
+        raw_chat_vecs = self._embed_fn(chat_anchors)
+        self._chat_anchors_vecs = [np.array(v, dtype=np.float32) for v in raw_chat_vecs]
+
+        # 3. Salva em disco para inicialização imediata nas próximas vezes
+        try:
+            cache_payload = {
+                "hash": content_hash,
+                "tools": serializable_tools,
+                "chat_anchors": [v.tolist() for v in self._chat_anchors_vecs]
+            }
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(cache_payload, f)
+            logger.info(f"[Semantic MCP Router] Cache de embeddings salvo em {cache_file}")
+        except Exception as e:
+            logger.debug(f"Não foi possível salvar cache de embeddings em disco: {e}")
+
+    def warmup(self):
+        """Pré-aquece o roteador semântico e a função de embeddings ONNX."""
+        try:
+            self._ensure_embeddings()
+            if not hasattr(self, "_embed_fn") or self._embed_fn is None:
+                from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+                self._embed_fn = ONNXMiniLM_L6_V2()
+            _ = self._embed_fn(["aquecimento"])
+        except Exception as e:
+            logger.debug(f"Aviso no warmup do MCPRegistry: {e}")
+
     def match_tool_semantically(self, user_query: str, threshold: float = 0.52) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
         Roteador Semântico MCP (Padrão Claude Code / Embeddings):
@@ -316,36 +413,13 @@ class MCPRegistry:
         chat_score = -1.0
 
         try:
-            from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
             import numpy as np
 
+            self._ensure_embeddings()
+
             if not hasattr(self, "_embed_fn") or self._embed_fn is None:
+                from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
                 self._embed_fn = ONNXMiniLM_L6_V2()
-
-            if not hasattr(self, "_tools_embeddings"):
-                # Pré-calcula os vetores semânticos das ferramentas cadastradas
-                self._tools_embeddings = {}
-                schemas = self.get_tool_schemas()
-                for s in schemas:
-                    fn = s["function"]
-                    texts_to_embed = [f"{fn['name']}: {fn['description']}"]
-                    if "intents" in fn and isinstance(fn["intents"], list):
-                        texts_to_embed.extend(fn["intents"])
-
-                    vecs = [np.array(v, dtype=np.float32) for v in self._embed_fn(texts_to_embed)]
-                    self._tools_embeddings[fn["name"]] = (fn, vecs)
-
-                # Âncoras conversacionais gerais para evitar falsos positivos em saudações ou papo comum
-                chat_anchors = [
-                    "olá assistente bom dia",
-                    "tudo bem como vai você",
-                    "quem é você e o que faz",
-                    "me conte uma história ou curiosidade",
-                    "responda esta minha pergunta por favor",
-                    "qual a sua opinião sobre isso",
-                    "como está o seu dia hoje"
-                ]
-                self._chat_anchors_vecs = [np.array(v, dtype=np.float32) for v in self._embed_fn(chat_anchors)]
 
             q_vec = np.array(self._embed_fn([q_clean])[0], dtype=np.float32)
             q_norm = np.linalg.norm(q_vec)

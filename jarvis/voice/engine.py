@@ -1,5 +1,6 @@
 import io
 import os
+import sys
 import asyncio
 import tempfile
 import logging
@@ -9,7 +10,12 @@ from jarvis.config import config
 
 logger = logging.getLogger("Jarvis.Voice")
 
-SOUNDS_DIR = Path(__file__).resolve().parent.parent / "assets" / "sounds"
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    _base_sounds = Path(sys._MEIPASS) / "assets" / "sounds"
+else:
+    _base_sounds = Path(__file__).resolve().parent.parent / "assets" / "sounds"
+
+SOUNDS_DIR = _base_sounds
 START_SOUND = SOUNDS_DIR / "listen_start.wav"
 STOP_SOUND = SOUNDS_DIR / "listen_stop.wav"
 
@@ -76,20 +82,32 @@ class VoiceEngine:
         return self.whisper_model if self.whisper_model is not False else None
 
     def play_sound(self, sound_path: Path):
-        """Reproduz um som de efeito (beep) curto via pygame."""
-        if not sound_path.exists():
-            return
-        try:
-            import pygame
-            if not pygame.mixer.get_init():
-                pygame.mixer.init()
-            sound = pygame.mixer.Sound(str(sound_path))
-            sound.set_volume(0.5)
-            sound.play()
-            while pygame.mixer.get_busy():
-                pygame.time.Clock().tick(25)
-        except Exception as e:
-            logger.debug(f"Falha ao tocar som {sound_path.name}: {e}")
+        """Reproduz um som de efeito (beep) curto via pygame com fallback sonoro no Windows."""
+        played = False
+        if sound_path and sound_path.exists():
+            try:
+                import pygame
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init()
+                sound = pygame.mixer.Sound(str(sound_path))
+                sound.set_volume(0.5)
+                sound.play()
+                while pygame.mixer.get_busy():
+                    pygame.time.Clock().tick(25)
+                played = True
+            except Exception as e:
+                logger.debug(f"Falha ao tocar som via pygame {sound_path.name}: {e}")
+
+        # Fallback de earcon via winsound no Windows se pygame ou arquivo falhar
+        if not played and os.name == "nt":
+            try:
+                import winsound
+                if "start" in str(sound_path).lower():
+                    winsound.Beep(880, 80)   # Tom agudo para início de escuta
+                else:
+                    winsound.Beep(520, 80)   # Tom grave para encerramento de escuta
+            except Exception:
+                pass
 
     def speak(self, text: str):
         """Sintetiza e reproduz o texto de forma fluida, sem picotar em pedaços."""

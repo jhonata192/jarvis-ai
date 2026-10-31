@@ -48,6 +48,23 @@ class JarvisAssistant:
             logger.info("Inicializando Jarvis com Motor AGY CLI...")
             self.llm = AgyProvider()
 
+        # Buffer circular de memória de curto prazo (últimos 2-3 turnos)
+        self.conversation_history = []
+
+    def warmup(self):
+        """Pré-aquece o roteador MCP e cache de embeddings."""
+        try:
+            mcp_reg = None
+            if hasattr(self, "llm") and self.llm is not None and hasattr(self.llm, "mcp_registry"):
+                mcp_reg = self.llm.mcp_registry
+            else:
+                from jarvis.core.mcp_registry import MCPRegistry
+                mcp_reg = MCPRegistry()
+            if hasattr(mcp_reg, "warmup"):
+                mcp_reg.warmup()
+        except Exception as e:
+            logger.debug(f"Aviso no warmup do JarvisAssistant: {e}")
+
     def ask(self, user_prompt: str, with_rag: bool = True) -> str:
         """
         Processa a solicitação do usuário.
@@ -69,11 +86,19 @@ class JarvisAssistant:
             mcp_reg = MCPRegistry()
 
         matched = mcp_reg.match_tool_semantically(user_prompt)
+        # Resolução de anáfora / continuidade contextual (ex: "e a bateria?", "aumente mais um pouco")
+        if not matched and self.conversation_history:
+            last_turn = self.conversation_history[-1]
+            combined_query = f"{last_turn['user']} {user_prompt}"
+            matched = mcp_reg.match_tool_semantically(combined_query)
+
         if matched:
             tool_name, tool_args = matched
             logger.info(f"[Semantic MCP Router] Intenção mapeada com sucesso para '{tool_name}' ({tool_args})")
             tool_result = mcp_reg.execute_tool(tool_name, tool_args)
             logger.info(f"[Semantic MCP Router] Resultado real da ferramenta: {tool_result}")
+
+            final_text = str(tool_result)
 
             # Síntese conversacional da resposta por voz se LLM estiver ativa
             if (
@@ -106,11 +131,12 @@ class JarvisAssistant:
                     )
                     text = resp["choices"][0]["message"].get("content", "").strip()
                     if text:
-                        return text
+                        final_text = text
                 except Exception as e:
                     logger.debug(f"Síntese conversacional pós-ferramenta: {e}")
 
-            return str(tool_result)
+            self._save_interaction(user_prompt, final_text)
+            return final_text
 
         # 2. Conversação Geral / RAG / Conhecimento
         rag_context = ""
@@ -125,7 +151,15 @@ class JarvisAssistant:
             except Exception as e:
                 logger.debug(f"Falha ao consultar memórias RAG: {e}")
 
-        prompt_with_context = f"{rag_context}Pergunta do usuário: {user_prompt}"
+        # Contexto de diálogo recente anterior (multi-turn)
+        dialogue_context = ""
+        if self.conversation_history:
+            dialogue_context = "Diálogo recente anterior:\n"
+            for turn in self.conversation_history[-2:]:
+                dialogue_context += f"Operador: {turn['user']}\nJarvis: {turn['assistant']}\n"
+            dialogue_context += "\n"
+
+        prompt_with_context = f"{rag_context}{dialogue_context}Pergunta atual do usuário: {user_prompt}"
 
         # Memorização automática
         if self.rag is not None and any(trigger in lower for trigger in ["aprenda que", "lembre-se que", "guarde isso", "grave isso", "salve que"]):
@@ -135,13 +169,23 @@ class JarvisAssistant:
                 logger.debug(f"Falha ao gravar memória: {e}")
 
         # Inferência
+        response_text = ""
         if self.llm is not None:
-            return self.llm.generate(
+            response_text = self.llm.generate(
                 prompt=prompt_with_context,
                 system_instruction=JARVIS_SYSTEM_PROMPT
             )
         else:
-            return mcp_reg.execute_tool("check_for_updates", {}) if "atualiz" in lower else "Comando processado com sucesso pelo sistema."
+            response_text = mcp_reg.execute_tool("check_for_updates", {}) if "atualiz" in lower else "Comando processado com sucesso pelo sistema."
+
+        self._save_interaction(user_prompt, response_text)
+        return response_text
+
+    def _save_interaction(self, user_text: str, assistant_text: str):
+        """Salva a interação no buffer de memória de curto prazo (máx 3 turnos)."""
+        self.conversation_history.append({"user": user_text, "assistant": assistant_text})
+        if len(self.conversation_history) > 3:
+            self.conversation_history.pop(0)
 
     def learn(self, title_or_category: str, content: str) -> str:
         if self.rag:

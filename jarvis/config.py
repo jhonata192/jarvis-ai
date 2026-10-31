@@ -26,6 +26,7 @@ def get_storage_path(subfolder: str) -> Path:
 LOGS_DIR = get_storage_path("logs")
 MODELS_DIR = get_storage_path("models")
 MEMORY_DIR = get_storage_path("memory_data") / "chromadb"
+CACHE_DIR = get_storage_path("cache")
 PIPER_DIR = MODELS_DIR / "piper"
 
 class JarvisConfig(BaseSettings):
@@ -67,11 +68,11 @@ class JarvisConfig(BaseSettings):
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "default"  # 'default' funciona em 100% dos processadores x86/x64
     
-    # Configurações do Microfone (Tolerância ampla para pausas naturais na fala sem cortar o usuário)
-    MIC_PAUSE_THRESHOLD: float = 2.0      # Espera 2.0s de silêncio contínuo para considerar que a fala terminou
-    MIC_NON_SPEAKING_DURATION: float = 0.8 # Janela de silêncio exigida após falar
+    # Configurações do Microfone (Tolerância calibrada para fala natural sem atrasos excessivos)
+    MIC_PAUSE_THRESHOLD: float = 1.4      # Espera 1.4s de silêncio contínuo para considerar que a fala terminou (mais responsivo)
+    MIC_NON_SPEAKING_DURATION: float = 0.6 # Janela de silêncio após falar
     MIC_ENERGY_THRESHOLD: int = 150       # Sensibilidade alta para microfones mais baixos
-    MIC_PHRASE_TIME_LIMIT: int = 45       # Permite comandos longos sem interrupção
+    MIC_PHRASE_TIME_LIMIT: int = 25       # Limite para evitar gravar longos períodos de silêncio/ruído
     MIC_LISTEN_TIMEOUT: int = 10          # Tempo para começar a falar
     
     # Daemon / Shortcuts

@@ -46,6 +46,21 @@ class SilentJarvisDaemon:
         self.is_processing = False
         self.running = True
 
+        # 4. Pré-aquecimento assíncrono do Whisper e MCP em segundo plano
+        threading.Thread(target=self._warmup_background, daemon=True, name="JarvisWarmup").start()
+
+    def _warmup_background(self):
+        """Pré-aquece Whisper STT e MCP em segundo plano para resposta instantânea já no primeiro comando."""
+        try:
+            logger.info("Iniciando pré-aquecimento assíncrono de modelos em background...")
+            t0 = time.time()
+            self.voice.get_whisper_model()
+            if hasattr(self.agent, "warmup"):
+                self.agent.warmup()
+            logger.info(f"Pré-aquecimento de background concluído com sucesso em {time.time() - t0:.2f}s.")
+        except Exception as e:
+            logger.warning(f"Aviso durante pré-aquecimento de background: {e}")
+
     def _check_and_download_models(self):
         """Verifica se o modelo da IA, o Whisper e a voz Piper estão baixados, avisando o usuário por voz."""
         from jarvis.config import config
