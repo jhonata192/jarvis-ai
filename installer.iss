@@ -30,9 +30,9 @@ ArchitecturesInstallIn64BitMode=x64
 DisableProgramGroupPage=yes
 DisableDirPage=yes
 PrivilegesRequired=lowest
-CloseApplications=yes
+CloseApplications=force
 CloseApplicationsFilter=JarvisAI.exe
-RestartApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -53,4 +53,5 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startupicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent

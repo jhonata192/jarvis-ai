@@ -123,9 +123,10 @@ class JarvisUpdater:
             ps_script = (
                 "Start-Sleep -Seconds 3; "
                 "Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; "
-                "Start-Sleep -Seconds 1; "
+                "while (Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; "
                 f"Start-Process -FilePath '{installer_file}' -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS', '/NORESTART' -Wait; "
-                f"if (Test-Path '{app_exe}') {{ Start-Process -FilePath '{app_exe}' }}"
+                "Start-Sleep -Seconds 1; "
+                f"if (-not (Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue)) {{ if (Test-Path '{app_exe}') {{ Start-Process -FilePath '{app_exe}' }} }}"
             )
             subprocess.Popen(
                 ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
