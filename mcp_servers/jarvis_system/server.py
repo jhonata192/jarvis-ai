@@ -57,7 +57,7 @@ def get_bluetooth_devices() -> str:
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=5,
+            timeout=12,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
         if res.returncode != 0 or not res.stdout.strip():
@@ -181,7 +181,7 @@ def get_battery_status() -> str:
     except Exception as e:
         return f"Erro ao ler status da bateria: {e}"
 
-@mcp_server.tool(name="get_hardware_telemetry", description="Retorna uso da CPU, memória RAM em GB e espaço livre em disco.")
+@mcp_server.tool(name="get_hardware_telemetry", description="Retorna uso da CPU, memória RAM em GB e espaço livre em disco, armazenamento do HD ou SSD.")
 def get_hardware_telemetry() -> str:
     """Retorna o uso atual de CPU, memória RAM em GB e espaço livre em disco."""
     try:
@@ -191,7 +191,7 @@ def get_hardware_telemetry() -> str:
         return (
             f"CPU em {cpu}%, "
             f"memória RAM com {mem.used / (1024**3):.1f} GB em uso de {mem.total / (1024**3):.1f} GB, "
-            f"e {disk.free / (1024**3):.1f} GB livres no disco C."
+            f"e {disk.free / (1024**3):.1f} GB de armazenamento livre no disco C de {disk.total / (1024**3):.1f} GB no total."
         )
     except Exception as e:
         return f"Erro na telemetria: {e}"

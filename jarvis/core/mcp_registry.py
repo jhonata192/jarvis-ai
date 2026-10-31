@@ -207,12 +207,21 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "get_hardware_telemetry",
-                    "description": "Retorna uso da CPU, memória RAM em GB e espaço livre em disco.",
+                    "description": "Retorna uso da CPU, memória RAM em GB e espaço de armazenamento livre em disco, HD ou SSD.",
                     "intents": [
                         "status do hardware",
                         "uso de memória ram e processador cpu",
+                        "como está o uso da cpu",
+                        "uso do processador",
+                        "consumo de memória e processador",
                         "desempenho da máquina",
-                        "telemetria do sistema e computador"
+                        "telemetria do sistema e computador",
+                        "quanto de armazenamento tem disponível no meu HD",
+                        "espaço livre em disco",
+                        "armazenamento disponível",
+                        "quanto espaço tem no HD",
+                        "espaço no SSD ou disco rígido",
+                        "capacidade e armazenamento livre"
                     ],
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
