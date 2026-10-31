@@ -257,12 +257,13 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "check_for_updates",
-                    "description": "Verifica se existe uma nova versão ou atualização do Jarvis AI disponível no GitHub.",
+                    "description": "Verifica se existe uma nova versão ou atualização do software Jarvis AI disponível no GitHub.",
                     "intents": [
-                        "verificar se há atualizações",
-                        "checar se tem versão nova",
-                        "tem update disponível",
-                        "verifique atualizações disponíveis"
+                        "verificar se há atualizações do sistema",
+                        "checar se tem versão nova do jarvis",
+                        "tem update disponível para o jarvis",
+                        "verifique atualizações disponíveis do sistema",
+                        "conferir atualização de versão do software"
                     ],
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }

@@ -90,19 +90,30 @@ class JarvisAssistant:
             from jarvis.core.mcp_registry import MCPRegistry
             mcp_reg = MCPRegistry()
 
-        matched = mcp_reg.match_tool_semantically(user_prompt)
-        # Resolução de anáfora / continuidade contextual (ex: "e a bateria?", "aumente mais um pouco")
-        if not matched and self.conversation_history:
-            last_turn = self.conversation_history[-1]
-            combined_query = f"{last_turn['user']} {user_prompt}"
-            matched = mcp_reg.match_tool_semantically(combined_query)
+        # Detecção de repetição contextual genérica ("verifique novamente", "veja de novo", "cheque outra vez", "repita")
+        is_generic_retry = any(k in lower for k in ["de novo", "novamente", "outra vez", "repita", "mais uma vez", "cheque de novo", "verifique de novo"])
+        has_explicit_target = any(k in lower for k in ["atualiz", "update", "versão", "versao", "bateria", "bluetooth", "volume", "cpu", "memória", "memoria", "disco", "hd", "ssd", "abrir", "site"])
 
-        # Se ainda não casou, mas tem última ferramenta registrada e usuário pede repetição/variação
-        if not matched and self.state_scratchpad.get("last_tool"):
-            if any(k in lower for k in ["de novo", "novamente", "repita", "mais um pouco", "aumente mais", "diminua mais"]):
-                last_t = self.state_scratchpad["last_tool"]
-                args = mcp_reg._infer_arguments_for_tool(last_t, lower)
-                matched = (last_t, args)
+        matched = None
+        if is_generic_retry and not has_explicit_target and self.state_scratchpad.get("last_tool"):
+            last_t = self.state_scratchpad["last_tool"]
+            args = mcp_reg._infer_arguments_for_tool(last_t, lower)
+            matched = (last_t, args)
+            logger.info(f"[Semantic MCP Router] Repetição contextual genérica ativada: reexecutando '{last_t}' ({args})")
+        else:
+            matched = mcp_reg.match_tool_semantically(user_prompt)
+            # Resolução de anáfora / continuidade contextual (ex: "e a bateria?", "aumente mais um pouco")
+            if not matched and self.conversation_history:
+                last_turn = self.conversation_history[-1]
+                combined_query = f"{last_turn['user']} {user_prompt}"
+                matched = mcp_reg.match_tool_semantically(combined_query)
+
+            # Se ainda não casou, mas tem última ferramenta registrada e usuário pede repetição/variação
+            if not matched and self.state_scratchpad.get("last_tool"):
+                if is_generic_retry or any(k in lower for k in ["mais um pouco", "aumente mais", "diminua mais"]):
+                    last_t = self.state_scratchpad["last_tool"]
+                    args = mcp_reg._infer_arguments_for_tool(last_t, lower)
+                    matched = (last_t, args)
 
         if matched:
             tool_name, tool_args = matched
@@ -124,14 +135,14 @@ class JarvisAssistant:
                     synthesis_system = (
                         "Você é JARVIS, um assistente de inteligência artificial de elite. "
                         "A ferramenta solicitada foi executada no sistema operacional. "
-                        "Gere uma resposta conclusiva curta, natural e elegante (1 a 2 frases) em português brasileiro confirmando o resultado para o usuário. "
-                        "Não mencione nomes de funções ou sintaxe de código."
+                        "Gere uma resposta conclusiva curta, natural e elegante (1 a 2 frases) em português brasileiro informando claramente os dados obtidos (mencione nomes de dispositivos, porcentagens, valores ou status reais). "
+                        "Não mencione nomes de funções de código nem sintaxe técnica."
                     )
                     synthesis_user = (
                         f"Solicitação do usuário: \"{user_prompt}\"\n"
                         f"Ação do sistema executada: {tool_name}\n"
                         f"Resultado obtido: \"{tool_result}\"\n"
-                        "Responda ao usuário com naturalidade:"
+                        "Responda ao usuário com naturalidade comunicando o resultado:"
                     )
                     resp = self.llm.llm.create_chat_completion(
                         messages=[

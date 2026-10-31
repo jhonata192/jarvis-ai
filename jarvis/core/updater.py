@@ -115,12 +115,17 @@ class JarvisUpdater:
             logger.info(f"Instalador da nova versão baixado com sucesso em: {installer_file}")
 
             # Cria comando PowerShell desacoplado que espera 3s (para a voz terminar), 
-            # mata qualquer processo JarvisAI.exe residual para liberar os arquivos .exe/.dll,
-            # executa o instalador Inno Setup silenciosamente (/SILENT /NORESTART) e encerra.
+            # encerra com segurança o JarvisAI.exe para liberar os arquivos .exe/.dll,
+            # executa o instalador Inno Setup (/VERYSILENT /FORCECLOSEAPPLICATIONS /NORESTART),
+            # e reinicia o JarvisAI atualizado após o término.
+            app_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "Jarvis AI"
+            app_exe = app_dir / "JarvisAI.exe"
             ps_script = (
                 "Start-Sleep -Seconds 3; "
                 "Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; "
-                f"Start-Process -FilePath '{installer_file}' -ArgumentList '/SILENT', '/NORESTART' -Wait"
+                "Start-Sleep -Seconds 1; "
+                f"Start-Process -FilePath '{installer_file}' -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS', '/NORESTART' -Wait; "
+                f"if (Test-Path '{app_exe}') {{ Start-Process -FilePath '{app_exe}' }}"
             )
             subprocess.Popen(
                 ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
