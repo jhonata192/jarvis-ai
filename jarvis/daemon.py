@@ -114,5 +114,8 @@ class JarvisDaemon:
                 break
 
 if __name__ == "__main__":
+    from jarvis.core.single_instance import ensure_single_instance
+    ensure_single_instance()
+
     daemon = JarvisDaemon(enable_voice=True)
     daemon.run_interactive_loop()

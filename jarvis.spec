@@ -54,7 +54,8 @@ hidden_imports = [
     "mcp_types",
     "mcp_servers",
     "mcp_servers.jarvis_system",
-    "mcp_servers.jarvis_system.server"
+    "mcp_servers.jarvis_system.server",
+    "jarvis.core.single_instance",
 ] + mcp_submodules + chromadb_submodules
 
 # Verifica se existe arquivo de versão gerado pelo build.bat

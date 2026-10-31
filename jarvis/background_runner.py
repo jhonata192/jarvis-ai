@@ -33,6 +33,10 @@ class SilentJarvisDaemon:
     """
 
     def __init__(self):
+        # Garante que apenas uma única instância do Jarvis AI execute simultaneamente
+        from jarvis.core.single_instance import ensure_single_instance
+        self.lock = ensure_single_instance()
+
         logger.info("Iniciando Jarvis Daemon (modo fala natural contínua)...")
         # 1. Inicia voz primeiro para poder falar avisos ao usuário se necessário
         self.voice = VoiceEngine()
@@ -202,5 +206,8 @@ class SilentJarvisDaemon:
             logger.debug(f"Verificação em background de atualização falhou: {e}")
 
 if __name__ == "__main__":
+    from jarvis.core.single_instance import ensure_single_instance
+    ensure_single_instance()
+
     daemon = SilentJarvisDaemon()
     daemon.run()
