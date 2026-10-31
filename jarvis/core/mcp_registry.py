@@ -24,6 +24,7 @@ class MCPRegistry:
         self.internal_tools: Dict[str, Callable] = {
             "get_bluetooth_devices": mcp_system.get_bluetooth_devices,
             "set_bluetooth_radio_state": mcp_system.set_bluetooth_radio_state,
+            "get_system_volume": mcp_system.get_system_volume,
             "set_system_volume": mcp_system.set_system_volume,
             "get_battery_status": mcp_system.get_battery_status,
             "get_hardware_telemetry": mcp_system.get_hardware_telemetry,
@@ -172,15 +173,44 @@ class MCPRegistry:
             {
                 "type": "function",
                 "function": {
+                    "name": "get_system_volume",
+                    "description": "Retorna o volume atual do som ou áudio do computador em porcentagem de 0 a 100 e se está mudo.",
+                    "intents": [
+                        "qual o volume do meu computador",
+                        "qual o volume do computador",
+                        "qual é o volume atual",
+                        "em quanto está o volume",
+                        "quanto está o volume do pc",
+                        "como está o volume",
+                        "nível de volume do áudio",
+                        "verificar volume",
+                        "checar volume do som",
+                        "volume atual do sistema",
+                        "qual o volume do pc",
+                        "qual o nível do som",
+                        "o som está alto ou baixo",
+                        "volume da máquina"
+                    ],
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "set_system_volume",
-                    "description": "Ajusta o volume do áudio do computador de 0 a 100 porcento ou silencia o som.",
+                    "description": "Ajusta, altera, aumenta, abaixa ou silencia o volume do áudio do computador Windows de 0 a 100 porcento.",
                     "intents": [
                         "ajustar volume",
                         "aumentar o som",
                         "abaixar volume",
                         "mutar áudio",
                         "colocar som no mudo",
-                        "definir volume em porcentagem"
+                        "definir volume em porcentagem",
+                        "mudar volume para",
+                        "coloque o volume em",
+                        "aumente o volume",
+                        "abaixe o volume",
+                        "diminua o volume"
                     ],
                     "parameters": {
                         "type": "object",
@@ -481,6 +511,30 @@ class MCPRegistry:
         except Exception as e:
             logger.debug(f"Aviso no warmup do MCPRegistry: {e}")
 
+    def _is_tool_plausible(self, tool_name: str, query_lower: str) -> bool:
+        """
+        Valida salvaguardas (guardrails) de contexto para evitar falsos positivos
+        em ferramentas de impacto no sistema (ex: lock_computer, take_screenshot).
+        """
+        if tool_name == "lock_computer":
+            return any(w in query_lower for w in ["bloque", "trav", "lock", "tranc", "sessão", "sessao", "estação", "estacao"])
+        if tool_name == "take_screenshot":
+            return any(w in query_lower for w in ["print", "foto", "screenshot", "captur"])
+        if tool_name == "minimize_windows":
+            return any(w in query_lower for w in ["minimiz", "área de trabalho", "area de trabalho", "desktop", "janela", "escond"])
+        if tool_name in ["check_for_updates", "install_latest_update"]:
+            return any(w in query_lower for w in ["atualiz", "update", "versão", "versao", "patch", "baixar", "instalar"])
+        if tool_name in ["set_system_volume", "get_system_volume"]:
+            has_vol_keyword = any(w in query_lower for w in ["volume", "som", "áudio", "audio", "mudo", "mute", "silenci", "alto", "baixo", "ouvir"])
+            if not has_vol_keyword:
+                return False
+            if tool_name == "set_system_volume":
+                is_query_phrase = any(w in query_lower for w in ["qual", "quanto", "como está", "como esta", "nível", "nivel", "verificar", "checar", "status"])
+                has_action_verb = any(w in query_lower for w in ["ajust", "mud", "aument", "abaix", "diminu", "coloc", "defin", "bot", "deix"])
+                if is_query_phrase and not has_action_verb:
+                    return False
+        return True
+
     def match_tool_semantically(self, user_query: str, threshold: float = 0.52) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
         Roteador Semântico MCP (Padrão Claude Code / Embeddings):
@@ -518,8 +572,10 @@ class MCPRegistry:
                     for cv in self._chat_anchors_vecs
                 )
 
-                # Pontuação das ferramentas MCP
+                # Pontuação das ferramentas MCP com verificação de plausibilidade
                 for t_name, (fn_meta, t_vecs) in self._tools_embeddings.items():
+                    if not self._is_tool_plausible(t_name, q_lower):
+                        continue
                     for t_vec in t_vecs:
                         t_norm = np.linalg.norm(t_vec)
                         if t_norm > 0:
@@ -544,7 +600,10 @@ class MCPRegistry:
         import re
         args = {}
 
-        if tool_name == "set_system_volume":
+        if tool_name == "get_system_volume":
+            return {}
+
+        elif tool_name == "set_system_volume":
             vol_match = re.search(r'(\d+)', query)
             if vol_match:
                 args["level_percent"] = max(0, min(100, int(vol_match.group(1))))

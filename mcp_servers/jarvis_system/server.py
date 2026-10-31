@@ -170,6 +170,30 @@ def set_system_volume(level_percent: int) -> str:
     except Exception as e:
         return f"Não foi possível alterar o volume: {e}"
 
+@mcp_server.tool(name="get_system_volume", description="Retorna o volume atual do som do computador de 0 a 100 porcento e se está no mudo.")
+def get_system_volume() -> str:
+    """Retorna o volume atual do áudio do computador e se está mutado."""
+    try:
+        from pycaw.pycaw import AudioUtilities
+        devices = AudioUtilities.GetSpeakers()
+
+        # Compatibilidade com versões novas e legadas de pycaw
+        if hasattr(devices, "EndpointVolume"):
+            volume = devices.EndpointVolume
+        else:
+            from ctypes import cast, POINTER
+            from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import IAudioEndpointVolume
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
+
+        level = round(volume.GetMasterVolumeLevelScalar() * 100)
+        is_muted = volume.GetMute()
+        mute_info = " (o som está no mudo)" if is_muted else ""
+        return f"O volume do computador está em {level}%{mute_info}."
+    except Exception as e:
+        return f"Não foi possível consultar o volume do sistema: {e}"
+
 @mcp_server.tool(name="get_battery_status", description="Retorna a porcentagem atual da bateria do computador e se está na tomada.")
 def get_battery_status() -> str:
     """Retorna a porcentagem atual da bateria do computador e se está na tomada."""
