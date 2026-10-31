@@ -29,7 +29,11 @@ class MCPRegistry:
             "get_hardware_telemetry": mcp_system.get_hardware_telemetry,
             "open_app_or_website": mcp_system.open_app_or_website,
             "check_for_updates": mcp_system.check_for_updates,
-            "install_latest_update": mcp_system.install_latest_update
+            "install_latest_update": mcp_system.install_latest_update,
+            "media_control": mcp_system.media_control,
+            "take_screenshot": mcp_system.take_screenshot,
+            "lock_computer": mcp_system.lock_computer,
+            "minimize_windows": mcp_system.minimize_windows
         }
         self.tools_map = self.internal_tools
         self.external_servers: Dict[str, Dict[str, Any]] = {}
@@ -284,6 +288,88 @@ class MCPRegistry:
                     ],
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "media_control",
+                    "description": "Controla a reprodução global de música ou vídeo no Windows (play, pausar, próxima faixa, faixa anterior, parar reprodução).",
+                    "intents": [
+                        "pausar a música",
+                        "pausa a música",
+                        "dar play na música",
+                        "tocar a música",
+                        "continuar a reprodução de música",
+                        "próxima música",
+                        "passar a música",
+                        "avançar faixa",
+                        "música anterior",
+                        "voltar a música",
+                        "parar a música",
+                        "pausar o spotify ou youtube"
+                    ],
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "description": "Ação de mídia: 'play_pause', 'next', 'previous', 'stop', 'mute'",
+                                "enum": ["play_pause", "next", "previous", "stop", "mute"]
+                            }
+                        },
+                        "required": ["action"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "take_screenshot",
+                    "description": "Captura uma foto da tela do computador (print screen) e salva a imagem na Área de Trabalho.",
+                    "intents": [
+                        "tirar print da tela",
+                        "capturar a tela",
+                        "tira um print",
+                        "tirar foto da tela",
+                        "fazer um print screen",
+                        "captura de tela",
+                        "salvar print da tela"
+                    ],
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "lock_computer",
+                    "description": "Bloqueia o computador exibindo a tela de bloqueio do Windows.",
+                    "intents": [
+                        "bloquear o computador",
+                        "bloquear a tela",
+                        "bloqueie o pc",
+                        "travar o windows",
+                        "bloquear a sessão",
+                        "bloqueia a tela",
+                        "bloqueia o computador"
+                    ],
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "minimize_windows",
+                    "description": "Minimiza todas as janelas abertas e mostra a Área de Trabalho do Windows.",
+                    "intents": [
+                        "minimizar todas as janelas",
+                        "mostrar a área de trabalho",
+                        "minimizar tudo",
+                        "esconder todas as janelas",
+                        "modo foco",
+                        "minimiza tudo"
+                    ],
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
             }
         ]
 
@@ -497,6 +583,18 @@ class MCPRegistry:
                 else:
                     words = query.split()
                     args["target"] = words[-1] if words else "notepad"
+
+        elif tool_name == "media_control":
+            if any(k in query for k in ["proxima", "próxima", "passar", "avancar", "avançar", "pular"]):
+                args["action"] = "next"
+            elif any(k in query for k in ["anterior", "voltar", "volta"]):
+                args["action"] = "previous"
+            elif any(k in query for k in ["parar", "stop"]):
+                args["action"] = "stop"
+            elif any(k in query for k in ["mudo", "mutar", "silenciar", "desmutar"]):
+                args["action"] = "mute"
+            else:
+                args["action"] = "play_pause"
 
         return args
 

@@ -92,7 +92,7 @@ class JarvisAssistant:
 
         # Detecção de repetição contextual genérica ("verifique novamente", "veja de novo", "cheque outra vez", "repita")
         is_generic_retry = any(k in lower for k in ["de novo", "novamente", "outra vez", "repita", "mais uma vez", "cheque de novo", "verifique de novo"])
-        has_explicit_target = any(k in lower for k in ["atualiz", "update", "versão", "versao", "bateria", "bluetooth", "volume", "cpu", "memória", "memoria", "disco", "hd", "ssd", "abrir", "site"])
+        has_explicit_target = any(k in lower for k in ["atualiz", "update", "versão", "versao", "bateria", "bluetooth", "volume", "cpu", "memória", "memoria", "disco", "hd", "ssd", "abrir", "site", "música", "musica", "print", "foto", "tela", "janela", "janelas", "bloquear"])
 
         matched = None
         if is_generic_retry and not has_explicit_target and self.state_scratchpad.get("last_tool"):

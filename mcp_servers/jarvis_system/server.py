@@ -4,6 +4,7 @@ import logging
 import subprocess
 import webbrowser
 import psutil
+from pathlib import Path
 from typing import Dict, Any, List
 
 logger = logging.getLogger("Jarvis.MCPServer")
@@ -249,6 +250,132 @@ def install_latest_update() -> str:
             return f"Não foi possível concluir o download da versão {tag}."
     except Exception as e:
         return f"Erro ao instalar atualização: {e}"
+
+def _get_desktop_dir() -> Path:
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders")
+        desktop_val, _ = winreg.QueryValueEx(key, "Desktop")
+        winreg.CloseKey(key)
+        expanded = os.path.expandvars(desktop_val)
+        if os.path.exists(expanded):
+            return Path(expanded)
+    except Exception:
+        pass
+    for candidate in [
+        Path.home() / "Desktop",
+        Path.home() / "Área de Trabalho",
+        Path.home() / "OneDrive" / "Área de Trabalho",
+        Path.home() / "OneDrive" / "Desktop"
+    ]:
+        if candidate.exists():
+            return candidate
+    return Path.home()
+
+@mcp_server.tool(name="media_control", description="Controla reprodução global de mídia no Windows (play, pause, avançar, voltar, parar, mutar).")
+def media_control(action: str = "play_pause") -> str:
+    """Controla reprodução global de áudio/vídeo no Windows (Spotify, YouTube, navegadores)."""
+    if os.name != "nt":
+        return "Controle de mídia suportado apenas no Windows."
+    import ctypes
+    act = action.lower().strip()
+    vk_codes = {
+        "play_pause": 0xB3,
+        "play": 0xB3,
+        "pause": 0xB3,
+        "pausar": 0xB3,
+        "tocar": 0xB3,
+        "next": 0xB0,
+        "proxima": 0xB0,
+        "avancar": 0xB0,
+        "pular": 0xB0,
+        "previous": 0xB1,
+        "anterior": 0xB1,
+        "voltar": 0xB1,
+        "stop": 0xB2,
+        "parar": 0xB2,
+        "mute": 0xAD,
+        "mudo": 0xAD
+    }
+    code = vk_codes.get(act, 0xB3)
+    try:
+        ctypes.windll.user32.keybd_event(code, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(code, 0, 2, 0)
+        if code == 0xB3:
+            return "Comando de reprodução e pausa de mídia executado."
+        elif code == 0xB0:
+            return "Avançado para a próxima faixa de música."
+        elif code == 0xB1:
+            return "Retornado para a faixa de música anterior."
+        elif code == 0xAD:
+            return "Estado de mudo do áudio alternado."
+        return f"Comando de mídia '{action}' executado com sucesso."
+    except Exception as e:
+        return f"Erro ao controlar mídia: {e}"
+
+@mcp_server.tool(name="take_screenshot", description="Captura a tela do computador (print screen) e salva a imagem na Área de Trabalho.")
+def take_screenshot() -> str:
+    """Tira um print da tela inteira do computador e salva na Área de Trabalho do usuário."""
+    if os.name != "nt":
+        return "Captura de tela suportada apenas no Windows."
+    from datetime import datetime
+    try:
+        desktop_dir = _get_desktop_dir()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"Screenshot_{timestamp}.png"
+        filepath = desktop_dir / filename
+        clean_path = str(filepath).replace("\\", "/")
+
+        ps_cmd = (
+            "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; "
+            "$s = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; "
+            "$b = New-Object System.Drawing.Bitmap $s.Width, $s.Height; "
+            "$g = [System.Drawing.Graphics]::FromImage($b); "
+            "$g.CopyFromScreen($s.Location, [System.Drawing.Point]::Empty, $s.Size); "
+            f"$b.Save('{clean_path}', [System.Drawing.Imaging.ImageFormat]::Png); "
+            "$g.Dispose(); $b.Dispose();"
+        )
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+        if filepath.exists():
+            return f"Captura de tela salva com sucesso na Área de Trabalho com o nome {filename}."
+        else:
+            return f"Não foi possível salvar a captura de tela ({res.stderr.strip()})."
+    except Exception as e:
+        return f"Erro ao capturar tela: {e}"
+
+@mcp_server.tool(name="lock_computer", description="Bloqueia a sessão do computador exibindo a tela de bloqueio do Windows.")
+def lock_computer() -> str:
+    """Bloqueia a estação de trabalho do Windows."""
+    if os.name != "nt":
+        return "Bloqueio suportado apenas no Windows."
+    import ctypes
+    try:
+        ctypes.windll.user32.LockWorkStation()
+        return "Computador bloqueado com sucesso."
+    except Exception as e:
+        return f"Erro ao bloquear computador: {e}"
+
+@mcp_server.tool(name="minimize_windows", description="Minimiza todas as janelas abertas e exibe a Área de Trabalho.")
+def minimize_windows() -> str:
+    """Minimiza todas as janelas abertas no Windows."""
+    if os.name != "nt":
+        return "Minimizar janelas suportado apenas no Windows."
+    import ctypes
+    try:
+        # Win + D (toggle desktop)
+        ctypes.windll.user32.keybd_event(0x5B, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(0x44, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(0x44, 0, 2, 0)
+        ctypes.windll.user32.keybd_event(0x5B, 0, 2, 0)
+        return "Todas as janelas foram minimizadas e a Área de Trabalho foi exibida."
+    except Exception as e:
+        return f"Erro ao minimizar janelas: {e}"
 
 if __name__ == "__main__":
     import asyncio
