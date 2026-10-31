@@ -48,8 +48,13 @@ class JarvisAssistant:
             logger.info("Inicializando Jarvis com Motor AGY CLI...")
             self.llm = AgyProvider()
 
-        # Buffer circular de memória de curto prazo (últimos 2-3 turnos)
+        # Memória Híbrida em 3 Camadas
+        # 1. Janela Ativa (últimos 5 turnos literais para conversação imediata)
         self.conversation_history = []
+        # 2. Sumário Rolante da Sessão (compressão contínua de turnos anteriores)
+        self.session_summary = ""
+        # 3. State Scratchpad (rastreamento de entidades, apps e última ferramenta)
+        self.state_scratchpad: Dict[str, Any] = {}
 
     def warmup(self):
         """Pré-aquece o roteador MCP e cache de embeddings."""
@@ -91,6 +96,13 @@ class JarvisAssistant:
             last_turn = self.conversation_history[-1]
             combined_query = f"{last_turn['user']} {user_prompt}"
             matched = mcp_reg.match_tool_semantically(combined_query)
+
+        # Se ainda não casou, mas tem última ferramenta registrada e usuário pede repetição/variação
+        if not matched and self.state_scratchpad.get("last_tool"):
+            if any(k in lower for k in ["de novo", "novamente", "repita", "mais um pouco", "aumente mais", "diminua mais"]):
+                last_t = self.state_scratchpad["last_tool"]
+                args = mcp_reg._infer_arguments_for_tool(last_t, lower)
+                matched = (last_t, args)
 
         if matched:
             tool_name, tool_args = matched
@@ -135,31 +147,55 @@ class JarvisAssistant:
                 except Exception as e:
                     logger.debug(f"Síntese conversacional pós-ferramenta: {e}")
 
-            self._save_interaction(user_prompt, final_text)
+            self._save_interaction(user_prompt, final_text, tool_name=tool_name)
             return final_text
 
         # 2. Conversação Geral / RAG / Conhecimento
+        # 2.1 Conhecimento Geral RAG
         rag_context = ""
         if with_rag and self.rag is not None:
             try:
                 memories = self.rag.query(user_prompt, n_results=2)
                 if memories:
-                    rag_context = "Contexto da Memória:\n"
-                    for i, m in enumerate(memories, 1):
-                        rag_context += f"- {m['content']}\n"
-                    rag_context += "\n"
+                    rag_lines = []
+                    for m in memories:
+                        if m.get("metadata", {}).get("category") != "dialogo_episodico":
+                            rag_lines.append(f"- {m['content']}")
+                    if rag_lines:
+                        rag_context = "Conhecimento do Sistema:\n" + "\n".join(rag_lines) + "\n\n"
             except Exception as e:
                 logger.debug(f"Falha ao consultar memórias RAG: {e}")
 
-        # Contexto de diálogo recente anterior (multi-turn)
+        # 2.2 Memória Episódica (busca conversas passadas da sessão ou de dias anteriores)
+        episodic_context = ""
+        if with_rag and self.rag is not None:
+            is_recall = any(k in lower for k in [
+                "lembra", "falou", "disse", "antes", "anterior", "mais cedo",
+                "qual era", "o que você", "relembre", "última vez", "conversamos"
+            ])
+            if is_recall or len(self.conversation_history) > 2:
+                try:
+                    past_episodes = self.rag.query_episodic(user_prompt, n_results=2)
+                    if past_episodes:
+                        ep_lines = [f"- {ep['content']}" for ep in past_episodes]
+                        episodic_context = "Conversas passadas recuperadas da memória:\n" + "\n".join(ep_lines) + "\n\n"
+                except Exception as e:
+                    logger.debug(f"Falha ao consultar memória episódica: {e}")
+
+        # 2.3 Sumário da Sessão (compressão de turnos anteriores)
+        summary_context = ""
+        if self.session_summary:
+            summary_context = f"Sumário dos tópicos anteriores da sessão:\n{self.session_summary}\n\n"
+
+        # 2.4 Diálogo Recente Imediato (últimos 5 turnos literais)
         dialogue_context = ""
         if self.conversation_history:
-            dialogue_context = "Diálogo recente anterior:\n"
-            for turn in self.conversation_history[-2:]:
+            dialogue_context = "Diálogo recente imediato:\n"
+            for turn in self.conversation_history[-5:]:
                 dialogue_context += f"Operador: {turn['user']}\nJarvis: {turn['assistant']}\n"
             dialogue_context += "\n"
 
-        prompt_with_context = f"{rag_context}{dialogue_context}Pergunta atual do usuário: {user_prompt}"
+        prompt_with_context = f"{rag_context}{episodic_context}{summary_context}{dialogue_context}Pergunta atual do operador: {user_prompt}"
 
         # Memorização automática
         if self.rag is not None and any(trigger in lower for trigger in ["aprenda que", "lembre-se que", "guarde isso", "grave isso", "salve que"]):
@@ -178,14 +214,55 @@ class JarvisAssistant:
         else:
             response_text = mcp_reg.execute_tool("check_for_updates", {}) if "atualiz" in lower else "Comando processado com sucesso pelo sistema."
 
-        self._save_interaction(user_prompt, response_text)
+        self._save_interaction(user_prompt, response_text, tool_name=None)
         return response_text
 
-    def _save_interaction(self, user_text: str, assistant_text: str):
-        """Salva a interação no buffer de memória de curto prazo (máx 3 turnos)."""
-        self.conversation_history.append({"user": user_text, "assistant": assistant_text})
-        if len(self.conversation_history) > 3:
-            self.conversation_history.pop(0)
+    def _save_interaction(self, user_text: str, assistant_text: str, tool_name: Optional[str] = None):
+        """Salva a interação nas 3 camadas de memória: Ativa, Episódica (ChromaDB) e Sumário Rolante."""
+        clean_user = user_text.strip()
+        clean_assistant = assistant_text.strip()
+        if not clean_user:
+            return
+
+        # 1. State Scratchpad
+        if tool_name:
+            self.state_scratchpad["last_tool"] = tool_name
+            self.state_scratchpad["last_result"] = clean_assistant[:120]
+
+        # 2. Memória Episódica Persistente (ChromaDB ONNX)
+        if self.rag is not None:
+            try:
+                self.rag.add_interaction(clean_user, clean_assistant, tool_name=tool_name)
+            except Exception as e:
+                logger.debug(f"Falha ao registrar memória episódica: {e}")
+
+        # 3. Janela Ativa (até 5 turnos literais)
+        self.conversation_history.append({
+            "user": clean_user,
+            "assistant": clean_assistant,
+            "tool": tool_name
+        })
+
+        # 4. Sumário Rolante da Sessão (comprime o mais antigo ao exceder 5 turnos)
+        if len(self.conversation_history) > 5:
+            oldest = self.conversation_history.pop(0)
+            self._accumulate_summary(oldest)
+
+    def _accumulate_summary(self, turn: Dict[str, Any]):
+        """Condensa turnos antigos em um sumário conciso de tópicos e fatos da sessão."""
+        u_summary = turn["user"][:80]
+        a_summary = turn["assistant"][:90].replace("\n", " ")
+        entry = f"• Pedido: '{u_summary}' -> Resultado: '{a_summary}'"
+
+        if not self.session_summary:
+            self.session_summary = entry
+        else:
+            lines = self.session_summary.split("\n")
+            lines.append(entry)
+            # Mantém no máximo 6 tópicos consolidados no sumário para não inchar tokens
+            if len(lines) > 6:
+                lines.pop(0)
+            self.session_summary = "\n".join(lines)
 
     def learn(self, title_or_category: str, content: str) -> str:
         if self.rag:

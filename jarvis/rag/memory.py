@@ -153,6 +153,46 @@ class JarvisRAG:
             logger.error(f"Erro ao consultar memória RAG: {e}")
             return []
 
+    def add_interaction(self, user_prompt: str, assistant_response: str, tool_name: Optional[str] = None) -> str:
+        """
+        Armazena uma interação de diálogo na memória episódica do ChromaDB.
+        Permite ao Jarvis recordar fatos, conversas e dados passados a qualquer momento.
+        """
+        import time
+        clean_user = user_prompt.strip()
+        clean_assistant = assistant_response.strip()
+        if not clean_user:
+            return ""
+
+        interaction_text = f"Operador: {clean_user}\nJarvis: {clean_assistant}"
+        doc_id = hashlib.sha256(f"episodic:{time.time()}:{clean_user}".encode('utf-8')).hexdigest()[:16]
+
+        meta = {
+            "category": "dialogo_episodico",
+            "user": clean_user[:200],
+            "assistant": clean_assistant[:200],
+            "tool": tool_name or "none",
+            "timestamp": str(time.time())
+        }
+
+        try:
+            self.collection.upsert(
+                documents=[interaction_text],
+                metadatas=[meta],
+                ids=[doc_id]
+            )
+            logger.debug(f"Interação episódica indexada [{doc_id}]")
+            return doc_id
+        except Exception as e:
+            logger.debug(f"Falha ao salvar interação episódica: {e}")
+            return ""
+
+    def query_episodic(self, query_text: str, n_results: int = 2) -> List[Dict[str, Any]]:
+        """
+        Pesquisa conversas passadas na memória episódica.
+        """
+        return self.query(query_text, n_results=n_results, category="dialogo_episodico")
+
     def sync_learnings_dir(self):
         """
         Lê arquivos .md ou .txt em data/learnings/ e indexa automaticamente na memória.
