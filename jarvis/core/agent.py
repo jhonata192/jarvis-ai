@@ -123,9 +123,18 @@ class JarvisAssistant:
 
             final_text = str(tool_result)
 
-            # Síntese conversacional da resposta por voz se LLM estiver ativa
+            # Para ferramentas MCP cujo resultado já é uma frase direta e natural em português,
+            # usamos diretamente sem sobrecarregar a CPU chamando a LLM desnecessariamente.
+            is_already_natural = (
+                isinstance(tool_result, str)
+                and not tool_result.strip().startswith(("{", "["))
+                and len(tool_result.strip()) > 5
+            )
+
+            # Síntese conversacional da resposta por voz se LLM estiver ativa e o resultado for estruturado/bruto
             if (
-                hasattr(self, "llm")
+                not is_already_natural
+                and hasattr(self, "llm")
                 and self.llm is not None
                 and hasattr(self.llm, "llm")
                 and self.llm.llm is not None

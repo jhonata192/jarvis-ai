@@ -62,6 +62,7 @@ class SilentJarvisDaemon:
             if hasattr(self.agent, "warmup"):
                 self.agent.warmup()
             logger.info(f"Pré-aquecimento de background concluído com sucesso em {time.time() - t0:.2f}s.")
+            self._trim_memory()
         except Exception as e:
             logger.warning(f"Aviso durante pré-aquecimento de background: {e}")
 
@@ -175,6 +176,18 @@ class SilentJarvisDaemon:
                 pass
         finally:
             self.is_processing = False
+            self._trim_memory()
+
+    def _trim_memory(self):
+        """Libera memória RAM ociosa e buffers não utilizados de volta para o Windows."""
+        try:
+            import gc
+            gc.collect()
+            if sys.platform == "win32":
+                import ctypes
+                ctypes.windll.psapi.EmptyWorkingSet(ctypes.windll.kernel32.GetCurrentProcess())
+        except Exception:
+            pass
 
     def run(self):
         keyboard.add_hotkey(HOTKEY, self.trigger_hotkey, suppress=False)

@@ -66,7 +66,7 @@ class JarvisConfig(BaseSettings):
     STT_ENGINE: str = "whisper"
     WHISPER_MODEL_SIZE: str = "small"
     WHISPER_DEVICE: str = "cpu"
-    WHISPER_COMPUTE_TYPE: str = "default"  # 'default' funciona em 100% dos processadores x86/x64
+    WHISPER_COMPUTE_TYPE: str = "int8"  # int8 é otimizado para CPU x86/x64, economizando >600MB de RAM
     
     # Configurações do Microfone (Tolerância calibrada para fala natural sem atrasos excessivos)
     MIC_PAUSE_THRESHOLD: float = 1.4      # Espera 1.4s de silêncio contínuo para considerar que a fala terminou (mais responsivo)

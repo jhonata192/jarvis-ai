@@ -36,19 +36,20 @@ class LocalLLMProvider:
 
 
             cpu_count = os.cpu_count() or 4
-            optimal_threads = max(2, min(cpu_count - 1, 6))
+            # Limita a no máximo 4 threads para não monopolizar os núcleos da CPU
+            optimal_threads = max(2, min(cpu_count - 2, 4))
 
             self.llm = Llama(
                 model_path=self.model_path,
-                n_ctx=2048,
-                n_batch=512,
+                n_ctx=1024,
+                n_batch=256,
                 n_threads=optimal_threads,
                 n_threads_batch=optimal_threads,
                 n_gpu_layers=int(os.environ.get("JARVIS_GPU_LAYERS", "0")),
                 chat_format="chatml",
                 verbose=False
             )
-            logger.info(f"Motor local pronto ({optimal_threads} threads, batch=512, chat_format=chatml).")
+            logger.info(f"Motor local pronto ({optimal_threads} threads, batch=256, ctx=1024, chat_format=chatml).")
         except (OSError, Exception) as e:
             logger.warning(
                 f"Aviso de compatibilidade de CPU: Motor neural local llama-cpp não pôde ser carregado nesta máquina ({e}). "
