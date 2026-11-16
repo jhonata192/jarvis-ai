@@ -125,18 +125,30 @@ class VoiceEngine:
         if self.tts_engine == "piper":
             if self._speak_piper(clean_text):
                 return
-            logger.debug("Voz Piper em inicialização ou indisponível. Tentando Edge-TTS/SAPI...")
+            logger.info("Piper TTS indisponível nesta CPU ou arquivos em download. Alternando para Edge-TTS...")
 
-        # 2. Tenta Edge-TTS (online de altíssima qualidade se conectado à internet)
-        if self.tts_engine == "edge-tts" or self.tts_engine == "piper":
-            try:
-                asyncio.run(self._speak_edge(clean_text))
-                return
-            except Exception as e:
-                logger.warning(f"Edge-TTS indisponível ({e}). Tentando fallback nativo.")
+        # 2. Fallback para Edge-TTS (síntese neural de altíssima fidelidade)
+        try:
+            self._speak_edge_sync(clean_text)
+            return
+        except Exception as e:
+            logger.warning(f"Edge-TTS indisponível ({e}). Alternando para SAPI nativo do Windows.")
 
-        # 3. Fallback nativo Windows SAPI SpVoice
+        # 3. Fallback nativo final Windows SAPI SpVoice (100% offline)
         self._speak_sapi(clean_text)
+
+    def _speak_edge_sync(self, text: str):
+        """Executa a síntese do Edge-TTS de forma síncrona e segura para qualquer thread."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                    ex.submit(asyncio.run, self._speak_edge(text)).result(timeout=15)
+            else:
+                loop.run_until_complete(self._speak_edge(text))
+        except (RuntimeError, Exception):
+            asyncio.run(self._speak_edge(text))
 
     def _speak_piper(self, text: str) -> bool:
         """Sintetiza áudio via Piper TTS em memória e reproduz via pygame com cache de frases curtas."""
