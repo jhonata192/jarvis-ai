@@ -13,14 +13,29 @@ import keyboard
 from jarvis.config import config, LOGS_DIR
 from jarvis.voice.engine import VoiceEngine, START_SOUND
 
+from logging.handlers import RotatingFileHandler
+
 LOG_FILE = LOGS_DIR / "jarvis_background.log"
 
-logging.basicConfig(
-    filename=str(LOG_FILE),
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    encoding="utf-8"
+# Configuração de Logs Rotacionais (limite de 3 MB por arquivo, até 3 backups = máx ~12 MB no disco)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter(
+    fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
 )
+
+# Handler rotacional seguro para evitar arquivos gigantescos
+rotating_handler = RotatingFileHandler(
+    filename=str(LOG_FILE),
+    maxBytes=3 * 1024 * 1024,  # 3 MB por arquivo
+    backupCount=3,             # Mantém os últimos 3 históricos (jarvis_background.log.1, .2, .3)
+    encoding="utf-8",
+    delay=False
+)
+rotating_handler.setFormatter(formatter)
+root_logger.addHandler(rotating_handler)
 
 logger = logging.getLogger("Jarvis.BackgroundDaemon")
 
