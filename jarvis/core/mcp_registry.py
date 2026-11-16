@@ -11,6 +11,61 @@ from mcp_servers.jarvis_system import server as mcp_system
 
 logger = logging.getLogger("Jarvis.MCPRegistry")
 
+TOOL_SEMANTIC_ANCHORS = {
+    "get_bluetooth_devices": [
+        "dispositivos bluetooth periféricos fones caixas conectados pareados",
+        "bluetooth devices connected headphones battery"
+    ],
+    "set_bluetooth_radio_state": [
+        "ligar ativar desligar desativar bluetooth rádio sinal antena",
+        "turn on turn off bluetooth radio"
+    ],
+    "get_system_volume": [
+        "consultar verificar nível de volume som áudio computador porcentagem",
+        "current system volume level sound audio percentage"
+    ],
+    "set_system_volume": [
+        "ajustar alterar aumentar diminuir abaixar volume som áudio porcentagem",
+        "set change increase decrease sound audio volume"
+    ],
+    "get_battery_status": [
+        "nível de porcentagem de carga bateria autonomia tomada carregador notebook",
+        "battery level percentage status charging power"
+    ],
+    "get_hardware_telemetry": [
+        "telemetria do hardware uso da cpu processador memória ram disco ssd hd espaço livre armazenamento",
+        "hardware usage cpu ram memory disk ssd hd storage space"
+    ],
+    "open_app_or_website": [
+        "abrir iniciar executar aplicativo programa navegador site bloco de notas calculadora terminal",
+        "open launch start application program website app"
+    ],
+    "check_for_updates": [
+        "verificar checar buscar novas versões atualizações update jarvis",
+        "check for new updates latest version jarvis"
+    ],
+    "install_latest_update": [
+        "instalar baixar aplicar atualização nova versão update jarvis",
+        "install download update latest version jarvis"
+    ],
+    "media_control": [
+        "controlar música reprodução pausar play próxima anterior spotify youtube",
+        "media playback control music pause play next previous track"
+    ],
+    "take_screenshot": [
+        "tirar print da tela captura de tela screenshot foto",
+        "take screenshot capture screen photo"
+    ],
+    "lock_computer": [
+        "bloquear computador tela estação de trabalho sessão lock",
+        "lock computer screen workstation session"
+    ],
+    "minimize_windows": [
+        "minimizar todas as janelas mostrar área de trabalho desktop esconder",
+        "minimize all windows show desktop"
+    ]
+}
+
 class MCPRegistry:
     """
     Host / Hub MCP do Jarvis (Padrão Claude Desktop / Cursor / Crush).
@@ -133,13 +188,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "get_bluetooth_devices",
-                    "description": "Retorna os dispositivos Bluetooth conectados, pareados e o nível de bateria de cada um.",
-                    "intents": [
-                        "listar aparelhos bluetooth conectados",
-                        "quais dispositivos bluetooth estão pareados",
-                        "ver lista de aparelhos bluetooth",
-                        "fones bluetooth conectados"
-                    ],
+                    "description": "Verifica, lista e consulta dispositivos, fones de ouvido, headphones, caixas de som e periféricos Bluetooth pareados ou conectados ao computador, incluindo status de conexão e nível de bateria.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             },
@@ -147,23 +196,14 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "set_bluetooth_radio_state",
-                    "description": "Liga ou desliga o rádio ou antena Bluetooth do computador.",
-                    "intents": [
-                        "ligar o bluetooth",
-                        "desligar o bluetooth",
-                        "ativar bluetooth",
-                        "desativar bluetooth",
-                        "liga bluetooth",
-                        "desliga bluetooth",
-                        "desconecte o bluetooth"
-                    ],
+                    "description": "Liga, ativa, desliga ou desativa o rádio, sinal e antena Bluetooth do computador Windows.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "state": {
                                 "type": "string",
                                 "enum": ["on", "off"],
-                                "description": "'on' para ligar ou 'off' para desligar o Bluetooth."
+                                "description": "'on' para ligar/ativar ou 'off' para desligar/desativar o Bluetooth."
                             }
                         },
                         "required": ["state"]
@@ -174,23 +214,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "get_system_volume",
-                    "description": "Retorna o volume atual do som ou áudio do computador em porcentagem de 0 a 100 e se está mudo.",
-                    "intents": [
-                        "qual o volume do meu computador",
-                        "qual o volume do computador",
-                        "qual é o volume atual",
-                        "em quanto está o volume",
-                        "quanto está o volume do pc",
-                        "como está o volume",
-                        "nível de volume do áudio",
-                        "verificar volume",
-                        "checar volume do som",
-                        "volume atual do sistema",
-                        "qual o volume do pc",
-                        "qual o nível do som",
-                        "o som está alto ou baixo",
-                        "volume da máquina"
-                    ],
+                    "description": "Verifica e informa o volume atual do som, áudio, alto-falantes ou caixas do computador em porcentagem (0 a 100%) e o status de mudo.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             },
@@ -198,20 +222,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "set_system_volume",
-                    "description": "Ajusta, altera, aumenta, abaixa ou silencia o volume do áudio do computador Windows de 0 a 100 porcento.",
-                    "intents": [
-                        "ajustar volume",
-                        "aumentar o som",
-                        "abaixar volume",
-                        "mutar áudio",
-                        "colocar som no mudo",
-                        "definir volume em porcentagem",
-                        "mudar volume para",
-                        "coloque o volume em",
-                        "aumente o volume",
-                        "abaixe o volume",
-                        "diminua o volume"
-                    ],
+                    "description": "Ajusta, altera, aumenta, abaixa, define ou silencia o nível de volume do som ou áudio do computador Windows de 0 a 100%.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -228,14 +239,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "get_battery_status",
-                    "description": "Retorna o nível de porcentagem da bateria e se o computador está conectado na tomada.",
-                    "intents": [
-                        "nível da bateria",
-                        "porcentagem de carga da bateria",
-                        "como está a bateria",
-                        "quanto de bateria tem",
-                        "computador está na tomada"
-                    ],
+                    "description": "Consulta e informa o nível de porcentagem de carga da bateria do computador, autonomia restante e se está conectado na tomada ou carregador.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             },
@@ -243,22 +247,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "get_hardware_telemetry",
-                    "description": "Retorna uso da CPU, memória RAM em GB e espaço de armazenamento livre em disco, HD ou SSD.",
-                    "intents": [
-                        "status do hardware",
-                        "uso de memória ram e processador cpu",
-                        "como está o uso da cpu",
-                        "uso do processador",
-                        "consumo de memória e processador",
-                        "desempenho da máquina",
-                        "telemetria do sistema e computador",
-                        "quanto de armazenamento tem disponível no meu HD",
-                        "espaço livre em disco",
-                        "armazenamento disponível",
-                        "quanto espaço tem no HD",
-                        "espaço no SSD ou disco rígido",
-                        "capacidade e armazenamento livre"
-                    ],
+                    "description": "Informa a telemetria e integridade do hardware: consumo da CPU e processador, memória RAM em uso e espaço livre de armazenamento em disco rígido HD ou SSD.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             },
@@ -266,15 +255,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "open_app_or_website",
-                    "description": "Abre aplicativos locais (bloco de notas, calculadora, vscode) ou sites da web.",
-                    "intents": [
-                        "abrir bloco de notas",
-                        "abrir calculadora",
-                        "abrir navegador",
-                        "abrir aplicativo ou programa",
-                        "abrir vscode",
-                        "abrir site na internet"
-                    ],
+                    "description": "Abre aplicativos, programas locais do Windows (bloco de notas, calculadora, terminal, vscode) ou sites da internet pelo navegador.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -291,14 +272,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "check_for_updates",
-                    "description": "Verifica se existe uma nova versão ou atualização do software Jarvis AI disponível no GitHub.",
-                    "intents": [
-                        "verificar se há atualizações do sistema",
-                        "checar se tem versão nova do jarvis",
-                        "tem update disponível para o jarvis",
-                        "verifique atualizações disponíveis do sistema",
-                        "conferir atualização de versão do software"
-                    ],
+                    "description": "Verifica se há novas versões, patches ou atualizações do Jarvis AI disponíveis no repositório do GitHub.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             },
@@ -306,16 +280,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "install_latest_update",
-                    "description": "Baixa e instala a atualização ou nova versão do Jarvis AI.",
-                    "intents": [
-                        "instalar atualização",
-                        "atualize",
-                        "atualizar agora",
-                        "baixar nova versão",
-                        "baixe a nova versão",
-                        "fazer update do sistema",
-                        "baixe a atualização"
-                    ],
+                    "description": "Baixa e instala a versão mais recente da atualização do software Jarvis AI no sistema operacional.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             },
@@ -323,21 +288,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "media_control",
-                    "description": "Controla a reprodução global de música ou vídeo no Windows (play, pausar, próxima faixa, faixa anterior, parar reprodução).",
-                    "intents": [
-                        "pausar a música",
-                        "pausa a música",
-                        "dar play na música",
-                        "tocar a música",
-                        "continuar a reprodução de música",
-                        "próxima música",
-                        "passar a música",
-                        "avançar faixa",
-                        "música anterior",
-                        "voltar a música",
-                        "parar a música",
-                        "pausar o spotify ou youtube"
-                    ],
+                    "description": "Controla a reprodução multimídia global de música, vídeos, Spotify ou YouTube no Windows: pausar, dar play, avançar próxima música, voltar faixa ou mutar.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -355,16 +306,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "take_screenshot",
-                    "description": "Captura uma foto da tela do computador (print screen) e salva a imagem na Área de Trabalho.",
-                    "intents": [
-                        "tirar print da tela",
-                        "capturar a tela",
-                        "tira um print",
-                        "tirar foto da tela",
-                        "fazer um print screen",
-                        "captura de tela",
-                        "salvar print da tela"
-                    ],
+                    "description": "Captura uma foto da tela inteira do computador (print screen) e salva a imagem na Área de Trabalho do usuário.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             },
@@ -372,16 +314,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "lock_computer",
-                    "description": "Bloqueia o computador exibindo a tela de bloqueio do Windows.",
-                    "intents": [
-                        "bloquear o computador",
-                        "bloquear a tela",
-                        "bloqueie o pc",
-                        "travar o windows",
-                        "bloquear a sessão",
-                        "bloqueia a tela",
-                        "bloqueia o computador"
-                    ],
+                    "description": "Bloqueia a estação de trabalho do usuário e exibe a tela de bloqueio do Windows para segurança da sessão.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             },
@@ -389,15 +322,7 @@ class MCPRegistry:
                 "type": "function",
                 "function": {
                     "name": "minimize_windows",
-                    "description": "Minimiza todas as janelas abertas e mostra a Área de Trabalho do Windows.",
-                    "intents": [
-                        "minimizar todas as janelas",
-                        "mostrar a área de trabalho",
-                        "minimizar tudo",
-                        "esconder todas as janelas",
-                        "modo foco",
-                        "minimiza tudo"
-                    ],
+                    "description": "Minimiza todas as janelas abertas e mostra a Área de Trabalho (desktop) do Windows.",
                     "parameters": {"type": "object", "properties": {}, "required": []}
                 }
             }
@@ -428,18 +353,9 @@ class MCPRegistry:
         import numpy as np
 
         schemas = self.get_tool_schemas()
-        chat_anchors = [
-            "olá assistente bom dia",
-            "tudo bem como vai você",
-            "quem é você e o que faz",
-            "me conte uma história ou curiosidade",
-            "responda esta minha pergunta por favor",
-            "qual a sua opinião sobre isso",
-            "como está o seu dia hoje"
-        ]
 
-        # Gera chave de hash única baseada nos esquemas e âncoras
-        serialized = json.dumps({"schemas": schemas, "anchors": chat_anchors}, sort_keys=True, ensure_ascii=False)
+        # Gera chave de hash única baseada nos esquemas e âncoras semânticas
+        serialized = json.dumps({"schemas": schemas, "anchors": TOOL_SEMANTIC_ANCHORS}, sort_keys=True, ensure_ascii=False)
         content_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
         cache_file = CACHE_DIR / "tools_embeddings_cache.json"
@@ -455,7 +371,6 @@ class MCPRegistry:
                         fn_meta = item["fn"]
                         vecs = [np.array(v, dtype=np.float32) for v in item["vecs"]]
                         self._tools_embeddings[fn_name] = (fn_meta, vecs)
-                    self._chat_anchors_vecs = [np.array(v, dtype=np.float32) for v in cache_data.get("chat_anchors", [])]
                     logger.debug("[Semantic MCP Router] Vetores carregados do cache em disco (0ms).")
                     return
             except Exception as e:
@@ -472,27 +387,24 @@ class MCPRegistry:
 
         for s in schemas:
             fn = s["function"]
-            texts_to_embed = [f"{fn['name']}: {fn['description']}"]
-            if "intents" in fn and isinstance(fn["intents"], list):
-                texts_to_embed.extend(fn["intents"])
+            name = fn["name"]
+            texts_to_embed = [fn["description"]]
+            if name in TOOL_SEMANTIC_ANCHORS:
+                texts_to_embed.extend(TOOL_SEMANTIC_ANCHORS[name])
 
             raw_vecs = self._embed_fn(texts_to_embed)
             vecs = [np.array(v, dtype=np.float32) for v in raw_vecs]
-            self._tools_embeddings[fn["name"]] = (fn, vecs)
-            serializable_tools[fn["name"]] = {
+            self._tools_embeddings[name] = (fn, vecs)
+            serializable_tools[name] = {
                 "fn": fn,
                 "vecs": [v.tolist() for v in vecs]
             }
-
-        raw_chat_vecs = self._embed_fn(chat_anchors)
-        self._chat_anchors_vecs = [np.array(v, dtype=np.float32) for v in raw_chat_vecs]
 
         # 3. Salva em disco para inicialização imediata nas próximas vezes
         try:
             cache_payload = {
                 "hash": content_hash,
-                "tools": serializable_tools,
-                "chat_anchors": [v.tolist() for v in self._chat_anchors_vecs]
+                "tools": serializable_tools
             }
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(cache_payload, f)
@@ -514,7 +426,7 @@ class MCPRegistry:
     def _is_tool_plausible(self, tool_name: str, query_lower: str) -> bool:
         """
         Valida salvaguardas (guardrails) de contexto para evitar falsos positivos
-        em ferramentas de impacto no sistema (ex: lock_computer, take_screenshot).
+        em ferramentas de impacto no sistema e conversação geral.
         """
         if tool_name == "lock_computer":
             return any(w in query_lower for w in ["bloque", "trav", "lock", "tranc", "sessão", "sessao", "estação", "estacao"])
@@ -528,19 +440,32 @@ class MCPRegistry:
             has_vol_keyword = any(w in query_lower for w in ["volume", "som", "áudio", "audio", "mudo", "mute", "silenci", "alto", "baixo", "ouvir"])
             if not has_vol_keyword:
                 return False
+            has_action_verb = any(w in query_lower for w in ["ajust", "mud", "aument", "abaix", "diminu", "coloc", "defin", "bot", "deix", "para", "pra"])
+            if tool_name == "get_system_volume":
+                if has_action_verb:
+                    return False
             if tool_name == "set_system_volume":
                 is_query_phrase = any(w in query_lower for w in ["qual", "quanto", "como está", "como esta", "nível", "nivel", "verificar", "checar", "status"])
-                has_action_verb = any(w in query_lower for w in ["ajust", "mud", "aument", "abaix", "diminu", "coloc", "defin", "bot", "deix"])
                 if is_query_phrase and not has_action_verb:
                     return False
+            return True
+        if tool_name in ["get_bluetooth_devices", "set_bluetooth_radio_state"]:
+            return any(w in query_lower for w in ["bluet", "blut", "fone", "headphone", "caixa", "periféric", "aparelho", "dispositivo"])
+        if tool_name == "get_battery_status":
+            return any(w in query_lower for w in ["bateri", "carga", "tomada", "carregador", "autonomia", "energia"])
+        if tool_name == "get_hardware_telemetry":
+            return any(w in query_lower for w in ["cpu", "processador", "memória", "memoria", "ram", "disco", "ssd", "hd", "hardware", "desempenho", "armazenamento", "espaço", "espaco"])
+        if tool_name == "media_control":
+            return any(w in query_lower for w in ["música", "musica", "faixa", "tocar", "play", "pausa", "avança", "avanca", "spotify", "youtube", "próxima", "proxima"])
+        if tool_name == "open_app_or_website":
+            return any(w in query_lower for w in ["abr", "inici", "execut", "naveg", "site", "calculadora", "bloco de notas", "notepad", "chrome", "vscode"])
         return True
 
-    def match_tool_semantically(self, user_query: str, threshold: float = 0.52) -> Optional[Tuple[str, Dict[str, Any]]]:
+    def match_tool_semantically(self, user_query: str, threshold: float = 0.25) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
-        Roteador Semântico MCP (Padrão Claude Code / Embeddings):
-        Analisa a intenção da fala do usuário contra as descrições em linguagem natural
-        e intenções exemplares de TODAS as ferramentas MCP registradas.
-        Retorna (tool_name, arguments) se houver correspondência semântica clara acima de conversação.
+        Roteador Semântico MCP Dinâmico (Vector Embeddings + Guardrails):
+        Identifica intenções do usuário em linguagem natural sem frases fixas ou limitações gramaticais.
+        Suporta gírias, variações fonéticas e pequenos erros de digitação (ex: 'blutoof', 'bluetoofh').
         """
         import re
         q_clean = user_query.strip()
@@ -548,10 +473,8 @@ class MCPRegistry:
         if not q_clean:
             return None
 
-        # 1. Resolução semântica via Embedding ONNX
         best_tool = None
         best_score = -1.0
-        chat_score = -1.0
 
         try:
             import numpy as np
@@ -566,13 +489,6 @@ class MCPRegistry:
             q_norm = np.linalg.norm(q_vec)
 
             if q_norm > 0:
-                # Pontuação de conversa geral
-                chat_score = max(
-                    float(np.dot(q_vec, cv) / (q_norm * np.linalg.norm(cv)))
-                    for cv in self._chat_anchors_vecs
-                )
-
-                # Pontuação das ferramentas MCP com verificação de plausibilidade
                 for t_name, (fn_meta, t_vecs) in self._tools_embeddings.items():
                     if not self._is_tool_plausible(t_name, q_lower):
                         continue
@@ -587,9 +503,8 @@ class MCPRegistry:
         except Exception as e:
             logger.debug(f"Roteador semântico ONNX operando em modo padrão: {e}")
 
-        # Se atingiu o limiar de similaridade semântica e superou a âncora de conversa livre
-        if best_tool and best_score >= threshold and best_score > chat_score:
-            logger.info(f"[Semantic MCP Router] Intenção mapeada para '{best_tool}' (similaridade: {best_score:.3f}, chat: {chat_score:.3f})")
+        if best_tool and best_score >= threshold:
+            logger.info(f"[Semantic MCP Router] Intenção mapeada para '{best_tool}' (similaridade: {best_score:.3f})")
             args = self._infer_arguments_for_tool(best_tool, q_lower)
             return (best_tool, args)
 

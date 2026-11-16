@@ -103,7 +103,8 @@ class JarvisAssistant:
         else:
             matched = mcp_reg.match_tool_semantically(user_prompt)
             # Resolução de anáfora / continuidade contextual (ex: "e a bateria?", "aumente mais um pouco")
-            if not matched and self.conversation_history:
+            is_anaphora = lower.startswith(("e ", "e o ", "e a ")) or any(k in lower for k in ["mais um pouco", "aumente mais", "diminua mais", "de novo", "novamente", "repita"])
+            if not matched and is_anaphora and self.conversation_history:
                 last_turn = self.conversation_history[-1]
                 combined_query = f"{last_turn['user']} {user_prompt}"
                 matched = mcp_reg.match_tool_semantically(combined_query)
@@ -121,52 +122,7 @@ class JarvisAssistant:
             tool_result = mcp_reg.execute_tool(tool_name, tool_args)
             logger.info(f"[Semantic MCP Router] Resultado real da ferramenta: {tool_result}")
 
-            final_text = str(tool_result)
-
-            # Para ferramentas MCP cujo resultado já é uma frase direta e natural em português,
-            # usamos diretamente sem sobrecarregar a CPU chamando a LLM desnecessariamente.
-            is_already_natural = (
-                isinstance(tool_result, str)
-                and not tool_result.strip().startswith(("{", "["))
-                and len(tool_result.strip()) > 5
-            )
-
-            # Síntese conversacional da resposta por voz se LLM estiver ativa e o resultado for estruturado/bruto
-            if (
-                not is_already_natural
-                and hasattr(self, "llm")
-                and self.llm is not None
-                and hasattr(self.llm, "llm")
-                and self.llm.llm is not None
-                and not getattr(self.llm, "fallback_mode", False)
-            ):
-                try:
-                    synthesis_system = (
-                        "Você é JARVIS, um assistente de inteligência artificial de elite. "
-                        "A ferramenta solicitada foi executada no sistema operacional. "
-                        "Gere uma resposta conclusiva curta, natural e elegante (1 a 2 frases) em português brasileiro informando claramente os dados obtidos (mencione nomes de dispositivos, porcentagens, valores ou status reais). "
-                        "Não mencione nomes de funções de código nem sintaxe técnica."
-                    )
-                    synthesis_user = (
-                        f"Solicitação do usuário: \"{user_prompt}\"\n"
-                        f"Ação do sistema executada: {tool_name}\n"
-                        f"Resultado obtido: \"{tool_result}\"\n"
-                        "Responda ao usuário com naturalidade comunicando o resultado:"
-                    )
-                    resp = self.llm.llm.create_chat_completion(
-                        messages=[
-                            {"role": "system", "content": synthesis_system},
-                            {"role": "user", "content": synthesis_user}
-                        ],
-                        max_tokens=60,
-                        temperature=0.3
-                    )
-                    text = resp["choices"][0]["message"].get("content", "").strip()
-                    if text:
-                        final_text = text
-                except Exception as e:
-                    logger.debug(f"Síntese conversacional pós-ferramenta: {e}")
-
+            final_text = self._synthesize_tool_response(user_prompt, tool_name, tool_result)
             self._save_interaction(user_prompt, final_text, tool_name=tool_name)
             return final_text
 
@@ -236,6 +192,63 @@ class JarvisAssistant:
 
         self._save_interaction(user_prompt, response_text, tool_name=None)
         return response_text
+
+    def _synthesize_tool_response(self, user_prompt: str, tool_name: str, tool_result: Any) -> str:
+        """
+        Sintetiza uma resposta de voz elegante, concisa e no estilo clássico britânico do JARVIS
+        usando o motor de IA (Local Qwen 2.5 1.5B ou AGY) com base no resultado da ferramenta.
+        """
+        raw_result = str(tool_result).strip()
+        if not raw_result:
+            return "Ação executada com sucesso, senhor."
+
+        synthesis_system = (
+            "Você é JARVIS, o assistente virtual pessoal e leal do usuário. "
+            "A ação solicitada foi executada no sistema operacional. "
+            "Comunique o resultado ao usuário com cortesia britânica (tratando por 'senhor' ou com respeito), "
+            "de forma fluida, natural, concisa e elegante (1 frase curta) em português brasileiro. "
+            "Nunca soe como um comando técnico de terminal nem mencione nomes de funções ou código."
+        )
+        synthesis_user = (
+            f"Solicitação do usuário: \"{user_prompt}\"\n"
+            f"Ação do sistema executada: {tool_name}\n"
+            f"Resultado obtido: \"{raw_result}\"\n"
+            "Responda ao usuário com elegância e naturalidade:"
+        )
+
+        try:
+            # 1. Provedor Local LLM (llama-cpp / Qwen 2.5 1.5B)
+            if (
+                hasattr(self, "llm")
+                and self.llm is not None
+                and hasattr(self.llm, "llm")
+                and self.llm.llm is not None
+                and not getattr(self.llm, "fallback_mode", False)
+            ):
+                resp = self.llm.llm.create_chat_completion(
+                    messages=[
+                        {"role": "system", "content": synthesis_system},
+                        {"role": "user", "content": synthesis_user}
+                    ],
+                    max_tokens=64,
+                    temperature=0.3
+                )
+                text = resp["choices"][0]["message"].get("content", "").strip()
+                if text:
+                    return text
+
+            # 2. Provedor AGY / Nuvem
+            elif hasattr(self, "llm") and self.llm is not None and hasattr(self.llm, "generate"):
+                text = self.llm.generate(
+                    prompt=synthesis_user,
+                    system_instruction=synthesis_system
+                ).strip()
+                if text:
+                    return text
+        except Exception as e:
+            logger.debug(f"Síntese conversacional pós-ferramenta: {e}")
+
+        return raw_result
 
     def _save_interaction(self, user_text: str, assistant_text: str, tool_name: Optional[str] = None):
         """Salva a interação nas 3 camadas de memória: Ativa, Episódica (ChromaDB) e Sumário Rolante."""

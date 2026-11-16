@@ -149,25 +149,28 @@ class LocalLLMProvider:
         if self.llm is None or self.fallback_mode:
             return self._fallback_generate(prompt)
 
-        # 1. Tenta roteamento semântico de ferramenta MCP
-        matched = self.mcp_registry.match_tool_semantically(prompt)
-        if matched:
-            tool_name, tool_args = matched
-            logger.info(f"[Semantic MCP Router] Intenção mapeada para '{tool_name}' ({tool_args})")
-            tool_result = self.mcp_registry.execute_tool(tool_name, tool_args)
-            logger.info(f"[Semantic MCP Router] Resultado real da ferramenta: {tool_result}")
+        # 1. Tenta roteamento semântico apenas para comandos diretos sem contexto de diálogo agregado
+        if "Pergunta atual do operador:" not in prompt and "Diálogo recente imediato:" not in prompt:
+            matched = self.mcp_registry.match_tool_semantically(prompt)
+            if matched:
+                tool_name, tool_args = matched
+                logger.info(f"[Semantic MCP Router] Intenção mapeada para '{tool_name}' ({tool_args})")
+                tool_result = self.mcp_registry.execute_tool(tool_name, tool_args)
+                logger.info(f"[Semantic MCP Router] Resultado real da ferramenta: {tool_result}")
 
             try:
                 synthesis_system = (
-                    "Você é JARVIS, assistente de IA. "
-                    "A ferramenta do sistema foi executada com sucesso. "
-                    "Responda ao usuário com 1 frase curta, natural e elegante em português confirmando o resultado."
+                    "Você é JARVIS, o assistente virtual pessoal e leal do usuário. "
+                    "A ação solicitada foi executada no sistema operacional. "
+                    "Comunique o resultado ao usuário com cortesia britânica (tratando por 'senhor' ou com respeito), "
+                    "de forma fluida, natural, concisa e elegante (1 frase curta) em português brasileiro. "
+                    "Nunca soe como um comando técnico de terminal nem mencione nomes de funções ou código."
                 )
                 synthesis_user = (
-                    f"Comando do usuário: \"{prompt}\"\n"
-                    f"Ação do sistema: {tool_name}\n"
+                    f"Solicitação do usuário: \"{prompt}\"\n"
+                    f"Ação do sistema executada: {tool_name}\n"
                     f"Resultado obtido: \"{tool_result}\"\n"
-                    "Resposta em voz alta:"
+                    "Responda ao usuário com elegância e naturalidade:"
                 )
                 resp = self.llm.create_chat_completion(
                     messages=[
