@@ -461,7 +461,7 @@ class MCPRegistry:
             return any(w in query_lower for w in ["abr", "inici", "execut", "naveg", "site", "calculadora", "bloco de notas", "notepad", "chrome", "vscode"])
         return True
 
-    def match_tool_semantically(self, user_query: str, threshold: float = 0.25) -> Optional[Tuple[str, Dict[str, Any]]]:
+    def match_tool_semantically(self, user_query: str, threshold: float = 0.40) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
         Roteador Semântico MCP Dinâmico (Vector Embeddings + Guardrails):
         Identifica intenções do usuário em linguagem natural sem frases fixas ou limitações gramaticais.

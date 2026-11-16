@@ -38,12 +38,24 @@ class JarvisAssistant:
         self.provider_type = config.AI_PROVIDER
         
         if self.provider_type == "local":
-            logger.info("Inicializando Jarvis com Motor de IA Local (100% Offline)...")
-            try:
-                self.llm = LocalLLMProvider(config.LOCAL_MODEL_PATH)
-            except (OSError, Exception) as e:
-                logger.warning(f"Falha ao instanciar LocalLLMProvider ({e}). Usando modo de compatibilidade universal.")
-                self.llm = None
+            from jarvis.config import load_settings
+            settings = load_settings()
+            engine = settings.get("ai_engine", "llama_cpp")
+            if engine == "ollama":
+                logger.info("Inicializando Jarvis com Motor Ollama...")
+                try:
+                    from jarvis.core.ollama_provider import OllamaProvider
+                    self.llm = OllamaProvider(model=settings.get("ollama_model", "qwen2.5:1.5b"))
+                except Exception as e:
+                    logger.warning(f"Falha ao instanciar OllamaProvider ({e}). Usando modo de compatibilidade universal.")
+                    self.llm = None
+            else:
+                logger.info("Inicializando Jarvis com Motor de IA Local (100% Offline llama-cpp)...")
+                try:
+                    self.llm = LocalLLMProvider(config.LOCAL_MODEL_PATH)
+                except (OSError, Exception) as e:
+                    logger.warning(f"Falha ao instanciar LocalLLMProvider ({e}). Usando modo de compatibilidade universal.")
+                    self.llm = None
         else:
             logger.info("Inicializando Jarvis com Motor AGY CLI...")
             self.llm = AgyProvider()
@@ -217,25 +229,28 @@ class JarvisAssistant:
         )
 
         try:
-            # 1. Provedor Local LLM (llama-cpp / Qwen 2.5 1.5B)
+            # 1. Provedor Local LLM (llama-cpp / Ollama / Qwen 2.5 1.5B)
             if (
                 hasattr(self, "llm")
                 and self.llm is not None
-                and hasattr(self.llm, "llm")
-                and self.llm.llm is not None
                 and not getattr(self.llm, "fallback_mode", False)
             ):
-                resp = self.llm.llm.create_chat_completion(
-                    messages=[
-                        {"role": "system", "content": synthesis_system},
-                        {"role": "user", "content": synthesis_user}
-                    ],
-                    max_tokens=64,
-                    temperature=0.3
-                )
-                text = resp["choices"][0]["message"].get("content", "").strip()
-                if text:
-                    return text
+                if hasattr(self.llm, "synthesize_tool_response"):
+                    text = self.llm.synthesize_tool_response(user_prompt, tool_name, raw_result)
+                    if text:
+                        return text
+                elif hasattr(self.llm, "llm") and self.llm.llm is not None:
+                    resp = self.llm.llm.create_chat_completion(
+                        messages=[
+                            {"role": "system", "content": synthesis_system},
+                            {"role": "user", "content": synthesis_user}
+                        ],
+                        max_tokens=64,
+                        temperature=0.3
+                    )
+                    text = resp["choices"][0]["message"].get("content", "").strip()
+                    if text:
+                        return text
 
             # 2. Provedor AGY / Nuvem
             elif hasattr(self, "llm") and self.llm is not None and hasattr(self.llm, "generate"):

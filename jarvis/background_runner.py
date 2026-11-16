@@ -52,6 +52,11 @@ class SilentJarvisDaemon:
         from jarvis.core.single_instance import ensure_single_instance
         self.lock = ensure_single_instance()
 
+        # 0. Verificação de primeira inicialização: assistente wxPython para seleção do motor (llama.cpp vs ollama)
+        from jarvis.ui.setup_dialog import check_and_run_first_time_setup
+        selected_engine = check_and_run_first_time_setup()
+        logger.info(f"Motor de IA ativo no sistema: {selected_engine}")
+
         logger.info("Iniciando Jarvis Daemon (modo fala natural contínua)...")
         # 1. Inicia voz primeiro para poder falar avisos ao usuário se necessário
         self.voice = VoiceEngine()
@@ -83,8 +88,11 @@ class SilentJarvisDaemon:
 
     def _check_and_download_models(self):
         """Verifica se o modelo da IA, o Whisper e a voz Piper estão baixados, avisando o usuário por voz."""
-        from jarvis.config import config
+        from jarvis.config import config, load_settings
         from jarvis.core.downloader import ensure_models_available
+
+        settings = load_settings()
+        engine = settings.get("ai_engine", "llama_cpp")
 
         llm_path = Path(config.LOCAL_MODEL_PATH)
         piper_path = Path(config.PIPER_MODEL_PATH)
@@ -92,7 +100,7 @@ class SilentJarvisDaemon:
 
         embedding_cache = Path.home() / ".cache" / "chroma" / "onnx_models" / "all-MiniLM-L6-v2" / "onnx" / "model.onnx"
         needs_embedding = not embedding_cache.exists()
-        needs_llm = not llm_path.exists() and config.AI_PROVIDER == "local"
+        needs_llm = not llm_path.exists() and config.AI_PROVIDER == "local" and engine == "llama_cpp"
         needs_piper = (not piper_path.exists() or not piper_cfg_path.exists()) and config.TTS_ENGINE == "piper"
 
         if needs_llm or needs_piper or needs_embedding:

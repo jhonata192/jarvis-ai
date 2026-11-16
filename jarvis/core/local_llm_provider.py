@@ -215,13 +215,19 @@ class LocalLLMProvider:
         Modo de Inteligência Universal (Executa em 100% dos processadores x86/x64).
         Interpreta comandos de sistema, atalhos, volume, aplicativos e telemetria via MCP.
         """
-        matched = self.mcp_registry.match_tool_semantically(prompt)
+        clean_user_prompt = prompt
+        if "Pergunta atual do operador:" in prompt:
+            clean_user_prompt = prompt.split("Pergunta atual do operador:")[-1].strip()
+
+        matched = self.mcp_registry.match_tool_semantically(clean_user_prompt)
         if matched:
             tool_name, tool_args = matched
             return str(self.mcp_registry.execute_tool(tool_name, tool_args))
 
-        p_lower = prompt.lower()
+        p_lower = clean_user_prompt.lower()
         if any(w in p_lower for w in ["olá", "ola", "bom dia", "boa tarde", "boa noite", "oi jarvis", "jarvis"]):
             return "Às suas ordens, senhor. Como posso ajudar com o seu sistema hoje?"
+        if any(w in p_lower for w in ["como você está", "como voce esta", "como vai", "tudo bem", "como está você"]):
+            return "Estou operando perfeitamente e pronto para ajudar, senhor. Em que posso ser útil?"
 
         return "Comando recebido. Todas as ferramentas de controle do sistema, volume, aplicativos e telemetria estão operando normalmente."

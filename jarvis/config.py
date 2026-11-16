@@ -83,3 +83,34 @@ class JarvisConfig(BaseSettings):
         arbitrary_types_allowed = True
 
 config = JarvisConfig()
+
+SETTINGS_FILE = USER_DATA_DIR / "settings.json"
+
+def load_settings() -> dict:
+    import json
+    default_settings = {
+        "ai_engine": "llama_cpp",
+        "setup_completed": False,
+        "ollama_model": "qwen2.5:1.5b"
+    }
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                default_settings.update(data)
+                return default_settings
+        except Exception:
+            pass
+    return default_settings
+
+def save_settings(data: dict):
+    import json
+    try:
+        USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        current = load_settings()
+        current.update(data)
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(current, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        import logging
+        logging.getLogger("Jarvis.Config").warning(f"Erro ao salvar settings.json: {e}")

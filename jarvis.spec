@@ -16,12 +16,14 @@ datas += collect_data_files("faster_whisper")
 datas += collect_data_files("chromadb")
 datas += collect_data_files("piper")
 datas += collect_data_files("tokenizers")
+datas += collect_data_files("wx")
 
 binaries = []
 binaries += collect_dynamic_libs("llama_cpp")
 binaries += collect_dynamic_libs("ctranslate2")
 binaries += collect_dynamic_libs("piper")
 binaries += collect_dynamic_libs("onnxruntime")
+binaries += collect_dynamic_libs("wx")
 
 # Coleta todos os submódulos do ChromaDB com tratamento de erro
 chromadb_submodules = [m for m in collect_submodules("chromadb") if "fastapi" not in m]
@@ -57,6 +59,11 @@ hidden_imports = [
     "mcp_servers.jarvis_system.server",
     "jarvis.core.single_instance",
     "logging.handlers",
+    "wx",
+    "wx.adv",
+    "wx.core",
+    "jarvis.ui.setup_dialog",
+    "jarvis.core.ollama_provider",
 ] + mcp_submodules + chromadb_submodules
 
 # Verifica se existe arquivo de versão gerado pelo build.bat
