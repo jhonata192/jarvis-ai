@@ -114,19 +114,19 @@ class JarvisUpdater:
 
             logger.info(f"Instalador da nova versão baixado com sucesso em: {installer_file}")
 
-            # Cria comando PowerShell desacoplado que espera 3s (para a voz terminar), 
+            # Cria comando PowerShell desacoplado que espera 6.5s (para a síntese de voz terminar completamente),
             # encerra com segurança o JarvisAI.exe para liberar os arquivos .exe/.dll,
-            # executa o instalador Inno Setup (/VERYSILENT /FORCECLOSEAPPLICATIONS /NORESTART),
-            # e reinicia o JarvisAI atualizado após o término.
+            # executa o instalador Inno Setup mostrando a barra de progresso (/SILENT /FORCECLOSEAPPLICATIONS /NORESTART),
+            # e reinicia o JarvisAI atualizado com o WorkingDirectory correto após o término.
             app_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "Jarvis AI"
             app_exe = app_dir / "JarvisAI.exe"
             ps_script = (
-                "Start-Sleep -Seconds 3; "
+                "Start-Sleep -Seconds 6.5; "
                 "Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; "
                 "while (Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; "
-                f"Start-Process -FilePath '{installer_file}' -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS', '/NORESTART' -Wait; "
-                "Start-Sleep -Seconds 1; "
-                f"if (-not (Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue)) {{ if (Test-Path '{app_exe}') {{ Start-Process -FilePath '{app_exe}' }} }}"
+                f"Start-Process -FilePath '{installer_file}' -ArgumentList '/SILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS', '/NORESTART' -Wait; "
+                "Start-Sleep -Seconds 2; "
+                f"if (-not (Get-Process -Name 'JarvisAI' -ErrorAction SilentlyContinue)) {{ if (Test-Path '{app_exe}') {{ Start-Process -FilePath '{app_exe}' -WorkingDirectory '{app_dir}' }} }}"
             )
             subprocess.Popen(
                 ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
@@ -134,11 +134,11 @@ class JarvisUpdater:
             )
             logger.info("Script de atualização e encerramento desacoplado disparado com sucesso.")
 
-            # Encerra o processo Python atual em 3.5 segundos
+            # Encerra o processo Python atual em 7 segundos para permitir a fala completa
             import threading
             def _exit_jarvis():
                 import time
-                time.sleep(3.5)
+                time.sleep(7.0)
                 os._exit(0)
 
             threading.Thread(target=_exit_jarvis, daemon=True).start()
