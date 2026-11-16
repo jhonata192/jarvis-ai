@@ -106,15 +106,51 @@ class OllamaProvider:
 
         return False
 
+    def warmup(self):
+        """
+        Pré-aquece o modelo Ollama na memória RAM/VRAM em background (Zero Cold-Start).
+        Envia uma chamada /api/generate com keep_alive=-1 para carregar os pesos da IA imediatamente,
+        evitando atrasos e timeouts no primeiro comando de voz do usuário.
+        """
+        try:
+            if not self.is_running():
+                self.ensure_running(timeout_sec=10)
+
+            if not self.is_running():
+                logger.warning("Ollama não está acessível na porta 11434 para pré-aquecimento.")
+                return
+
+            logger.info(f"Pré-aquecendo modelo Ollama '{self.model}' na memória (keep_alive permanente)...")
+            import urllib.request
+            url = f"{self.host}/api/generate"
+            payload = {
+                "model": self.model,
+                "keep_alive": -1
+            }
+            data_bytes = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=data_bytes,
+                headers={"Content-Type": "application/json", "User-Agent": "JarvisAI"},
+                method="POST"
+            )
+            # Timeout generoso no background (120s) para discos lentos ou CPUs modestas
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                if resp.status == 200:
+                    logger.info(f"Modelo Ollama '{self.model}' carregado e residente na memória com sucesso!")
+        except Exception as e:
+            logger.warning(f"Aviso no pré-aquecimento do Ollama: {e}")
+
     def create_chat_completion(
         self,
         messages: List[Dict[str, str]],
         max_tokens: int = 256,
-        temperature: float = 0.3
+        temperature: float = 0.3,
+        timeout: int = 90
     ) -> Dict[str, Any]:
         """
-        Executa chamada de chat completion compatível com OpenAI via endpoint do Ollama.
-        POST http://127.0.0.1:11434/v1/chat/completions
+        Executa chamada de chat completion via Ollama mantendo o modelo residente na memória (keep_alive: -1).
+        Utiliza prioritariamente a API nativa (/api/chat) com fallback para /v1/chat/completions.
         """
         import urllib.request
         import urllib.error
@@ -122,19 +158,54 @@ class OllamaProvider:
         if not self.is_running():
             self.ensure_running(timeout_sec=5)
 
-        url = f"{self.host}/v1/chat/completions"
-        payload = {
+        # 1. Tenta API nativa do Ollama (/api/chat) com keep_alive: -1 permanente
+        try:
+            url_chat = f"{self.host}/api/chat"
+            payload_chat = {
+                "model": self.model,
+                "messages": messages,
+                "stream": False,
+                "keep_alive": -1,
+                "options": {
+                    "num_predict": max_tokens,
+                    "temperature": temperature
+                }
+            }
+            data_bytes = json.dumps(payload_chat).encode("utf-8")
+            req = urllib.request.Request(
+                url_chat,
+                data=data_bytes,
+                headers={"Content-Type": "application/json", "User-Agent": "JarvisAI"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                resp_data = json.loads(resp.read().decode("utf-8"))
+                content = resp_data.get("message", {}).get("content", "")
+                return {
+                    "choices": [{
+                        "message": {
+                            "role": "assistant",
+                            "content": content
+                        }
+                    }]
+                }
+        except Exception as e:
+            logger.debug(f"Tentativa /api/chat falhou ({e}). Recorrendo ao endpoint /v1/chat/completions...")
+
+        # 2. Fallback para /v1/chat/completions (OpenAI Compatible)
+        url_v1 = f"{self.host}/v1/chat/completions"
+        payload_v1 = {
             "model": self.model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "stream": False
+            "stream": False,
+            "keep_alive": -1
         }
-        data_bytes = json.dumps(payload).encode("utf-8")
-
-        req = urllib.request.Request(
-            url,
-            data=data_bytes,
+        data_bytes_v1 = json.dumps(payload_v1).encode("utf-8")
+        req_v1 = urllib.request.Request(
+            url_v1,
+            data=data_bytes_v1,
             headers={
                 "Content-Type": "application/json",
                 "User-Agent": "JarvisAI"
@@ -143,11 +214,11 @@ class OllamaProvider:
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req_v1, timeout=timeout) as resp:
                 resp_data = json.loads(resp.read().decode("utf-8"))
                 return resp_data
         except Exception as e:
-            logger.warning(f"Erro na requisição ao Ollama ({url}): {e}")
+            logger.warning(f"Erro na requisição ao Ollama ({url_v1}): {e}")
             raise e
 
     def synthesize_tool_response(self, user_prompt: str, tool_name: str, tool_result: Any) -> str:
@@ -155,6 +226,17 @@ class OllamaProvider:
         raw_result = str(tool_result).strip()
         if not raw_result:
             return "Ação executada com sucesso, senhor."
+
+        lower_result = raw_result.lower()
+        # Se o resultado for uma falha, exceção ou aviso do sistema, responde diretamente sem latência de LLM
+        if any(err in lower_result for err in [
+            "erro", "não foi possível", "falha", "exception", "no module named", "error", "falhou"
+        ]):
+            return raw_result
+
+        # Para comandos de sistema diretos com respostas curtas informativas, responde diretamente
+        if any(w in lower_result for w in ["volume ajustado", "volume atual", "bateria", "janelas minimizadas"]):
+            return raw_result
 
         synthesis_system = (
             "Você é JARVIS, o assistente virtual pessoal e leal do usuário. "
@@ -177,7 +259,8 @@ class OllamaProvider:
                     {"role": "user", "content": synthesis_user}
                 ],
                 max_tokens=64,
-                temperature=0.3
+                temperature=0.3,
+                timeout=45
             )
             text = resp["choices"][0]["message"].get("content", "").strip()
             if text:

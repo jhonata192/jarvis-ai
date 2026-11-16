@@ -69,7 +69,7 @@ class JarvisAssistant:
         self.state_scratchpad: Dict[str, Any] = {}
 
     def warmup(self):
-        """Pré-aquece o roteador MCP e cache de embeddings."""
+        """Pré-aquece o roteador MCP, cache de embeddings e motor LLM."""
         try:
             mcp_reg = None
             if hasattr(self, "llm") and self.llm is not None and hasattr(self.llm, "mcp_registry"):
@@ -79,6 +79,10 @@ class JarvisAssistant:
                 mcp_reg = MCPRegistry()
             if hasattr(mcp_reg, "warmup"):
                 mcp_reg.warmup()
+
+            # Pré-aquece a LLM (Ollama ou llama.cpp)
+            if hasattr(self, "llm") and self.llm is not None and hasattr(self.llm, "warmup"):
+                self.llm.warmup()
         except Exception as e:
             logger.debug(f"Aviso no warmup do JarvisAssistant: {e}")
 
@@ -213,6 +217,17 @@ class JarvisAssistant:
         raw_result = str(tool_result).strip()
         if not raw_result:
             return "Ação executada com sucesso, senhor."
+
+        lower_res = raw_result.lower()
+        # Se for mensagem de erro, exceção ou aviso do sistema, responde imediatamente sem latência de LLM
+        if any(err in lower_res for err in [
+            "erro", "não foi possível", "falha", "exception", "no module named", "error", "falhou"
+        ]):
+            return raw_result
+
+        # Para comandos de sistema diretos com respostas curtas informativas, responde diretamente
+        if any(w in lower_res for w in ["volume ajustado", "volume atual", "bateria", "janelas minimizadas"]):
+            return raw_result
 
         synthesis_system = (
             "Você é JARVIS, o assistente virtual pessoal e leal do usuário. "

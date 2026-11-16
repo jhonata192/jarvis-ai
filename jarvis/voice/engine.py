@@ -69,11 +69,14 @@ class VoiceEngine:
         if self.whisper_model is None and config.STT_ENGINE == "whisper":
             try:
                 from faster_whisper import WhisperModel
-                logger.info(f"Carregando Whisper ({config.WHISPER_MODEL_SIZE}) em {config.WHISPER_DEVICE}...")
+                cpu_count = os.cpu_count() or 4
+                optimal_threads = max(2, min(cpu_count, 4))
+                logger.info(f"Carregando Whisper ({config.WHISPER_MODEL_SIZE}) em {config.WHISPER_DEVICE} ({optimal_threads} threads)...")
                 self.whisper_model = WhisperModel(
                     config.WHISPER_MODEL_SIZE,
                     device=config.WHISPER_DEVICE,
-                    compute_type=config.WHISPER_COMPUTE_TYPE
+                    compute_type=config.WHISPER_COMPUTE_TYPE,
+                    cpu_threads=optimal_threads
                 )
                 logger.info("Modelo Whisper pronto.")
             except (OSError, Exception) as e:
@@ -285,6 +288,8 @@ class VoiceEngine:
                         wav_data,
                         language="pt",
                         beam_size=1,
+                        best_of=1,
+                        temperature=0.0,
                         vad_filter=True
                     )
                     text = " ".join([segment.text for segment in segments]).strip()

@@ -58,6 +58,20 @@ class LocalLLMProvider:
             self.llm = None
             self.fallback_mode = True
 
+    def warmup(self):
+        """Pré-aquece o modelo local executando uma inferência leve."""
+        if self.llm is None or self.fallback_mode:
+            return
+        try:
+            logger.info("Pré-aquecendo modelo local llama.cpp...")
+            self.llm.create_chat_completion(
+                messages=[{"role": "user", "content": "ok"}],
+                max_tokens=1
+            )
+            logger.info("Modelo local llama.cpp pré-aquecido com sucesso.")
+        except Exception as e:
+            logger.debug(f"Aviso no warmup do LocalLLMProvider: {e}")
+
     def _extract_tool_calls(self, message: Dict[str, Any]) -> List[Dict[str, Any]]:
         calls = []
 
