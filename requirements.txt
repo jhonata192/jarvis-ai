@@ -118,3 +118,4 @@ sse-starlette==3.6.0
 starlette==1.10.0
 llama-cpp-python==0.3.36
 wxpython>=4.2.0
+pycaw>=20240210
